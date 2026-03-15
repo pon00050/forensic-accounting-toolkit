@@ -64,3 +64,17 @@ Audit trail for ecosystem-wide changes coordinated from this hub.
 - kr-beneish setuptools→hatchling deferred to Phase 4
 - jfia-catalog stays without pyproject.toml (data artifact)
 - kr-forensic-finance keeps `00_Reference/` pattern (not replaced by `knowledge/`)
+
+### Phase 2: GitHub Publication (5 repos)
+
+All 5 previously unpublished repos created as public GitHub repos:
+
+| Repo | URL | Description |
+|------|-----|-------------|
+| kr-beneish | https://github.com/pon00050/kr-beneish | Beneish M-Score for Korean IFRS companies |
+| kr-trading-calendar | https://github.com/pon00050/kr-trading-calendar | KRX trading-day math for Korean capital markets |
+| kr-derivatives | https://github.com/pon00050/kr-derivatives | Korean CB/BW option pricing and forensic ITM issuance detection |
+| jfia-catalog | https://github.com/pon00050/jfia-catalog | 469 JFIA forensic accounting articles — structured metadata catalog |
+| jfia-forensic | https://github.com/pon00050/jfia-forensic | Forensic accounting detectlet schema and JFIA literature enrichment |
+
+Total ecosystem: 8 public repos on GitHub (7 core + kr-health-monitor).
