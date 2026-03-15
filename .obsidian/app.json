@@ -1,5 +1,5 @@
 {
   "userIgnoreFilters": [
-    ".claude", ".git", "cross-issues"
+    ".claude", ".git", "cross-issues", "business"
   ]
 }

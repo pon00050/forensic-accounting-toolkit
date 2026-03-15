@@ -87,3 +87,41 @@ You are in the coordination hub. Your job here is to:
 
 Do NOT write code here. Do NOT duplicate information that belongs in a sub-project's own docs.
 When you need to understand a sub-project, read its CLAUDE.md first.
+
+---
+
+## AI Autonomy Protocol
+
+How the AI agent works through tasks autonomously:
+
+1. **Read the board:**
+   ```bash
+   "/c/Program Files/GitHub CLI/gh.exe" project item-list 1 --owner pon00050 --format json
+   ```
+2. **Filter** to `Owner == AI`, `Status != Done`, sort by priority (P0 first)
+3. **Pick** the next unblocked item, `cd` to the correct project directory
+4. **Read** that project's `CLAUDE.md` first — it contains install, test, architecture, and conventions
+5. **Execute** the task: write code, run tests, commit with descriptive messages
+6. **Update the board** status via `gh` CLI
+7. **Update `ECOSYSTEM.md`** if publication status or blocker status changed
+8. **Move to next item**
+
+If anything unexpected is encountered (test failure, missing file, structure mismatch), document it in `CHANGELOG.md` before proceeding — never silently work around it.
+
+---
+
+## Task Ownership Rules
+
+### AI handles
+- Code fixes, file creation, refactoring
+- Git operations (`commit`, `push`, `branch`)
+- GitHub operations (`gh repo create`, `gh project` updates, `gh issue`)
+- Running tests and pipelines
+- Updating documentation (`CLAUDE.md`, `ECOSYSTEM.md`, `CHANGELOG.md`)
+
+### Human handles
+- Phone calls (KSD, government agencies)
+- LinkedIn/email outreach (InMails, job applications)
+- Web portal logins requiring 2FA (PyPI, SEIBRO registration)
+- Spending money (PyPI tokens, API subscriptions)
+- Deleting published repos or irreversible external actions
