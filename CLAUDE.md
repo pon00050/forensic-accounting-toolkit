@@ -77,6 +77,36 @@ kr-derivatives reads **data files** from kr-forensic-finance (not code imports).
 
 ---
 
+## Skills Reference
+
+Skills are invoked with `/skill-name`. They live in `.claude/skills/`.
+
+| Skill | Trigger | What it does |
+|-------|---------|-------------|
+| `/board` | Start of session, or "what should I work on?" | Shows project board grouped by status/priority, suggests execution order |
+| `/plan` | Before starting non-trivial work, or "analyze the ecosystem" | 5-layer ecosystem analysis: board state, repo health, convention drift, integration gaps, strategic alignment |
+| `/plan conventions` | After code changes across repos, or convention audit needed | Full convention checklist audit via convention-auditor agent |
+| `/diagnose-moneyness` | **After any kr-derivatives screen run that produces outliers with moneyness >10x** | Queries DART API for CB filings and corporate actions, checks pykrx adjusted vs unadjusted prices, classifies each case as SPLIT_ARTIFACT / GENUINE_ITM / DATA_ERROR / INCONCLUSIVE |
+| `/work` | "Work on it" or picking a task from the board | Executes the next AI task autonomously |
+| `/done` | After completing a task | Updates board status and ECOSYSTEM.md |
+| `/ecosystem-status` | "What's the status?" | Shows publication and blocker status |
+
+### When to use `/diagnose-moneyness`
+
+This skill exists because **adjusted stock prices and unadjusted DART exercise prices can be in different denominations** for stocks that underwent reverse splits or share consolidations. This is a recurring data quality issue in the CB/BW issuance dilution screen (kr-derivatives `examples/02_issuance_dilution_screen.py`).
+
+**Run it when:**
+- A screen run shows flag rate >40% (likely contaminated by false extreme moneyness)
+- Any CB case shows moneyness >10x (economically implausible for a genuine issuance)
+- After regenerating `price_volume.parquet` with new pykrx settings
+- When validating that a price data fix actually resolved the denomination mismatch
+
+**It will NOT:**
+- Fix any code or data (read-only diagnostic)
+- Work fully if pykrx `adjusted=False` is broken (marks cases as INCONCLUSIVE)
+
+---
+
 ## Canonical Conventions (enforced by convention-auditor agent)
 
 The full convention checklist lives in `.claude/skills/canonical-conventions/SKILL.md`.
