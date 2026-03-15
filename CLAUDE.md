@@ -105,7 +105,7 @@ Skills are invoked with `/skill-name`. They live in `.claude/skills/`.
 | Skill | Trigger | What it does |
 |-------|---------|-------------|
 | `/triage` | Start of session (auto), or "what needs doing?" | Scans 10 sources (board, git, data freshness, code signals, conventions, backlog) and ranks next actions |
-| `/board` | Start of session, or "what should I work on?" | Shows project board grouped by status/priority, suggests execution order |
+| `/board` | "What should I work on?" or "what order?" | Merges board + backlog, builds dependency graph, produces wave-based execution order |
 | `/plan` | Before starting non-trivial work, or "analyze the ecosystem" | 5-layer ecosystem analysis: board state, repo health, convention drift, integration gaps, strategic alignment |
 | `/plan conventions` | After code changes across repos, or convention audit needed | Full convention checklist audit via convention-auditor agent |
 | `/diagnose-moneyness` | **After any kr-derivatives screen run that produces outliers with moneyness >10x** | Queries DART API for CB filings and corporate actions, checks pykrx adjusted vs unadjusted prices, classifies each case as SPLIT_ARTIFACT / GENUINE_ITM / DATA_ERROR / INCONCLUSIVE |
