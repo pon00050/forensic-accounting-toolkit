@@ -4,6 +4,18 @@ Audit trail for ecosystem-wide changes coordinated from this hub.
 
 ---
 
+## 2026-03-15 — Close the Task Loop
+
+- Added README.md to forensic-accounting-toolkit for GitHub landing page (commit `f625078`)
+- Closed task loop: `/done` now runs cascade scan (6 sources), syncs CLAUDE.md counts, syncs cross-issues
+- Added BOARD FRESHNESS and TEST COUNTS cross-checks to `triage-scan.sh`
+- Created `lessons.md` — operational rules loaded at session start
+- Added Stop hook to surface uncommitted/unpushed state at session end
+- Fixed 4 stale counts in CLAUDE.md, resolved XB-001, marked 2 stale board items Done
+- Committed kr-derivatives reports (README.md + fourth_run_prep.md)
+
+---
+
 ## 2026-03-15 — XB-001 Fix: Split-Adjusted Prices
 
 - Fixed `02_Pipeline/extract_price_volume.py` in kr-forensic-finance: explicitly pass `adjusted=True` to `pykrx.stock.get_market_ohlcv_by_date`
