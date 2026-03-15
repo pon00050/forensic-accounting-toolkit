@@ -78,3 +78,15 @@ All 5 previously unpublished repos created as public GitHub repos:
 | jfia-forensic | https://github.com/pon00050/jfia-forensic | Forensic accounting detectlet schema and JFIA literature enrichment |
 
 Total ecosystem: 8 public repos on GitHub (7 core + kr-health-monitor).
+
+### Phase 3: GitHub Project Board — AI vs Human Ownership
+
+- Created `Owner` field (SINGLE_SELECT: AI, Human) on project board
+- Tagged all 14 existing items with Owner:
+  - AI (4 active): XB-001 fix, kr-derivatives Run 2, kr-beneish PyPI, Phase 3 DART
+  - AI (6 done): 5 publish tasks + Add CLAUDE.md to kr-trading-calendar
+  - Human (4): LinkedIn InMails, EY/Deloitte application, G1 grant call, SEIBRO API call
+- Added 2 new items (AI, P1):
+  - "Migrate kr-beneish to hatchling build system"
+  - "Update forensic-accounting-toolkit README for GitHub"
+- Board total: 16 items (10 AI, 4 Human, 6 Done)
