@@ -77,6 +77,28 @@ kr-derivatives reads **data files** from kr-forensic-finance (not code imports).
 
 ---
 
+## Canonical Conventions (enforced by convention-auditor agent)
+
+The full convention checklist lives in `.claude/skills/canonical-conventions/SKILL.md`.
+Run `/plan conventions` to audit all repos against it. Summary:
+
+| Convention | Expected | Exceptions |
+|---|---|---|
+| Build system | hatchling | jfia-catalog (data artifact) |
+| Python | >=3.11 | kr-beneish (>=3.10) |
+| Package manager | uv | — |
+| Test command | `uv run pytest tests/ -v` | kr-forensic-finance: `python -m pytest` |
+| uv.lock | Committed | jfia-catalog |
+| conftest.py | Required if tests exist | — |
+| constants.py | Required if magic strings exist | kr-trading-calendar |
+| Paths module | `_paths.py` or `paths.py` in src | Repos with no file I/O |
+| Commit style | feat/fix/docs/refactor/test/chore prefix | — |
+| .claude/ directory | Present | jfia-catalog |
+| compile-bytecode | `false` in `[tool.uv]` | Repos without pyproject.toml |
+| CLAUDE.md | Present at repo root | — |
+
+---
+
 ## When Working in This Directory
 
 You are in the coordination hub. Your job here is to:

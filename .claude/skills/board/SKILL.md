@@ -24,10 +24,37 @@ Read the GitHub Project board and display a clear summary for the human.
 
 3. For each Todo item, show: priority, title, owner. If an item has a body with useful context (like an issue description), mention the key detail in one line.
 
-4. End with a one-line suggestion: "Next unblocked AI task: [title]. Say 'work on it' or pick something else."
+4. **Suggested Execution Order**
+
+   After the board display, analyze remaining Todo items and produce a wave-based execution plan.
+
+   **Known dependencies** (A must finish before B):
+   - "Migrate kr-beneish to hatchling" must finish before "kr-beneish PyPI publication"
+   - "Fix: split-adjusted prices" must finish before "kr-derivatives Run 2"
+   - Any "Add conftest.py" task must finish before "Increase test coverage" in the same repo
+   - Any "Migrate to hatchling" task must finish before PyPI publication for that repo
+
+   **Scheduling rules:**
+   - Group remaining Todo items into waves based on the dependency list above
+   - Wave 1 = items with no unfinished dependencies (can start now)
+   - Wave 2 = items that depend on Wave 1 completions
+   - Wave 3+ = deeper dependencies if they exist
+   - Items in the same wave but in different repos can run in parallel
+   - Show Human tasks separately, sorted by deadline proximity
+
+   Display as:
+   ```
+   Execution Order:
+     Wave 1 (parallel): [items with no blockers]
+     Wave 2 (after Wave 1): [items that depend on Wave 1]
+     Human (independent): [human tasks sorted by deadline]
+   ```
+
+5. End with: "Next unblocked AI task: [title]. Say 'work on it' or pick something else. Run `/plan` for deeper analysis of emergent tasks not on this board."
 
 ## Rules
 
 - Do NOT execute any task. This is read-only.
 - Do NOT modify the board.
 - Keep output concise — the human glances at this to decide what to work on.
+- When new board items are added that have dependencies, update the "Known dependencies" list above.
