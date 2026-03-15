@@ -11,11 +11,11 @@
 | kr-forensic-finance | pon00050/kr-forensic-finance | — | Published (102 commits, 2 stars) |
 | kr-company-registry | pon00050/kr-company-registry | — | Published (v1.0.0, weekly auto-refresh) |
 | kr-health-monitor | pon00050/kr-health-monitor | — | Published (out of toolkit scope) |
-| kr-beneish | **Not published** | **Not published** | Local only. No remote configured. |
-| kr-derivatives | **Not published** | **Not published** | Local only. No remote configured. |
-| kr-trading-calendar | **Not published** | **Not published** | Local only. No remote. Missing CLAUDE.md. Uncommitted README changes. |
-| jfia-catalog | **Not published** | — | Local only. Single commit. |
-| jfia-forensic | **Not published** | **Not published** | Local only. |
+| kr-beneish | **Not published** | **Not published** | Standardized. CLAUDE.md + ecosystem section. Ready to publish. |
+| kr-derivatives | **Not published** | **Not published** | Standardized. CLAUDE.md + ecosystem section. Ready to publish. |
+| kr-trading-calendar | **Not published** | **Not published** | Standardized. CLAUDE.md created. Ready to publish. |
+| jfia-catalog | **Not published** | — | Standardized. CLAUDE.md + .gitignore created. Ready to publish. |
+| jfia-forensic | **Not published** | **Not published** | Standardized. CLAUDE.md + ecosystem section. Ready to publish. |
 
 ---
 
@@ -35,8 +35,8 @@ See `cross-issues/` for details. Summary:
 ### P0 — Enables credible demo and outreach
 - [ ] Fix split-adjusted prices in kr-forensic-finance (XB-001)
 - [ ] Publish 5 repos to GitHub (beneish, derivatives, calendar, jfia-catalog, jfia-forensic)
-- [ ] Add CLAUDE.md to kr-trading-calendar
-- [ ] Commit pending README changes in kr-trading-calendar
+- [x] Add CLAUDE.md to kr-trading-calendar ✓ (2026-03-15)
+- [x] Commit pending README changes in kr-trading-calendar ✓ (2026-03-15)
 
 ### P1 — This month
 - [ ] kr-derivatives Run 2 (after XB-001 fix)
