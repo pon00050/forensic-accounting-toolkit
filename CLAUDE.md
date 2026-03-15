@@ -57,7 +57,7 @@ kr-derivatives reads **data files** from kr-forensic-finance (not code imports).
 ## How to Navigate
 
 - **Cross-project blockers**: `cross-issues/` in this directory
-- **Business outreach & deadlines**: `business/` in this directory
+- **Business outreach & deadlines**: `knowledge/business/` (gitignored)
 - **Per-project details**: Read the CLAUDE.md in each project's root
 - **Platform strategy docs**: `../kr-forensic-finance/00_Reference/10_Platform_Strategy/`
 - **Ecosystem status**: `ECOSYSTEM.md` in this directory
