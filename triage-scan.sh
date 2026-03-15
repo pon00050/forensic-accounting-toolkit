@@ -11,21 +11,12 @@
 set -uo pipefail
 
 MODE="${1:-full}"
-BASE="/c/Users/pon00/Projects"
-HUB="$BASE/forensic-accounting-toolkit"
-GH="/c/Program Files/GitHub CLI/gh.exe"
 
-REPOS=(
-    forensic-accounting-toolkit
-    kr-forensic-finance
-    kr-company-registry
-    kr-trading-calendar
-    kr-beneish
-    kr-derivatives
-    jfia-catalog
-    jfia-forensic
-    kr-real-estate
-)
+# Source shared config (paths, repo list, GH CLI, test commands)
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ecosystem.conf"
+
+# Use ALL_REPOS from ecosystem.conf
+REPOS=("${ALL_REPOS[@]}")
 
 # Helper: get file modification epoch timestamp (Windows/Git Bash compatible)
 file_epoch() {
@@ -57,8 +48,9 @@ echo ""
 # SOURCE 1: Board state
 # ─────────────────────────────────────────────
 echo "--- BOARD ---"
-BOARD_JSON=$("$GH" project item-list 1 --owner pon00050 --format json 2>/dev/null) && {
-    echo "$BOARD_JSON" | python -c "
+if [ -n "$GH" ]; then
+    BOARD_JSON=$("$GH" project item-list 1 --owner pon00050 --format json 2>/dev/null) && {
+        echo "$BOARD_JSON" | python -c "
 import sys, json
 data = json.load(sys.stdin)
 items = data.get('items', [])
@@ -76,7 +68,10 @@ for status in ['Todo', 'In Progress', 'Done']:
             owner = i.get('owner', '?')
             print(f'  [{priority}] [{owner}] {title}')
 " 2>/dev/null
-} || echo "UNAVAILABLE (gh CLI offline or auth issue)"
+    } || echo "UNAVAILABLE (gh CLI offline or auth issue)"
+else
+    echo "UNAVAILABLE (gh CLI not found)"
+fi
 echo ""
 
 # ─────────────────────────────────────────────
@@ -318,8 +313,8 @@ for repo in "${REPOS[@]}"; do
     if [ ! -f "$dir/CLAUDE.md" ]; then
         issues="${issues}CLAUDE.md "
     fi
-    # Check 2: .claude/ directory exists (exception: jfia-catalog)
-    if [ "$repo" != "jfia-catalog" ] && [ ! -d "$dir/.claude" ]; then
+    # Check 2: .claude/ directory exists (exception: repos without pyproject.toml)
+    if [ -f "$dir/pyproject.toml" ] && [ "$repo" != "jfia-catalog" ] && [ ! -d "$dir/.claude" ]; then
         issues="${issues}.claude/ "
     fi
     # Check 3: uv.lock tracked (if pyproject.toml exists, exception: jfia-catalog)
@@ -340,29 +335,26 @@ fi
 echo ""
 
 # ─────────────────────────────────────────────
-# TEST COUNTS: compare actual test counts to CLAUDE.md claims
+# TEST COUNTS: compare actual test counts to CLAUDE.md claims (dynamically parsed)
 # ─────────────────────────────────────────────
 echo "--- TEST COUNTS ---"
-declare -A CLAUDE_COUNTS=(
-    [kr-company-registry]=18
-    [kr-trading-calendar]=10
-    [kr-beneish]=61
-    [kr-derivatives]=79
-    [jfia-forensic]=76
-    [kr-forensic-finance]=306
-)
+declare -A CLAUDE_COUNTS=()
+eval "$(parse_claude_test_counts)"
+
 test_drift=0
-for repo in "${!CLAUDE_COUNTS[@]}"; do
+for repo in "${REPOS_WITH_TESTS[@]}"; do
     dir="$BASE/$repo"
     [ -d "$dir" ] || continue
-    claimed=${CLAUDE_COUNTS[$repo]}
 
-    # Use the right test command per repo; parse "N tests" from last line
-    if [ "$repo" = "kr-forensic-finance" ]; then
-        actual=$(cd "$dir" && python -m pytest tests/ --co -q 2>/dev/null | tail -1 | sed 's/[^0-9]*//' | grep -oE '^[0-9]+' || echo "?")
-    else
-        actual=$(cd "$dir" && uv run pytest tests/ --co -q 2>/dev/null | tail -1 | sed 's/[^0-9]*//' | grep -oE '^[0-9]+' || echo "?")
+    claimed="${CLAUDE_COUNTS[$repo]:-}"
+    if [ -z "$claimed" ]; then
+        # No claim in CLAUDE.md for this repo — skip silently
+        continue
     fi
+
+    # Collect actual test count
+    collect_cmd=$(test_collect_cmd "$repo")
+    actual=$(cd "$dir" && eval "$collect_cmd" 2>/dev/null | tail -1 | sed 's/[^0-9]*//' | grep -oE '^[0-9]+' || echo "?")
 
     if [ "$actual" = "?" ]; then
         echo "  [WARN] $repo — could not collect tests"
@@ -413,10 +405,10 @@ else
     echo "  [BLOCKED] kr-derivatives/data/input/ missing"
 fi
 
-# Check: pyproject.toml uses hatchling (spot check repos that should)
-for repo in kr-beneish kr-derivatives kr-trading-calendar jfia-forensic; do
+# Check: pyproject.toml uses hatchling (all repos with pyproject.toml, except jfia-catalog)
+for repo in "${REPOS[@]}"; do
     pptoml="$BASE/$repo/pyproject.toml"
-    if [ -f "$pptoml" ]; then
+    if [ "$repo" != "jfia-catalog" ] && [ "$repo" != "forensic-accounting-toolkit" ] && [ -f "$pptoml" ]; then
         if ! grep -q 'hatchling' "$pptoml" 2>/dev/null; then
             echo "  [DRIFT] $repo — pyproject.toml does not use hatchling"
         fi

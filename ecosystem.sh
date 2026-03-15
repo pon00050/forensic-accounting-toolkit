@@ -11,33 +11,8 @@
 
 set -euo pipefail
 
-BASE="/c/Users/pon00/Projects"
-
-# Repos with tests, in dependency order
-REPOS_WITH_TESTS=(
-    kr-company-registry
-    kr-trading-calendar
-    kr-beneish
-    kr-derivatives
-    jfia-catalog
-    jfia-forensic
-    kr-forensic-finance
-)
-
-ALL_REPOS=(
-    forensic-accounting-toolkit
-    "${REPOS_WITH_TESTS[@]}"
-)
-
-# Test commands per repo (most use uv run pytest, kr-forensic-finance uses python -m pytest)
-test_cmd() {
-    local repo="$1"
-    case "$repo" in
-        kr-forensic-finance) echo "python -m pytest tests/ -v" ;;
-        jfia-catalog)        echo "echo 'no tests (data artifact)'" ;;
-        *)                   echo "uv run pytest tests/ -v" ;;
-    esac
-}
+# Source shared config (paths, repo list, test commands)
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ecosystem.conf"
 
 cmd_test_all() {
     echo "=== Testing all repos ==="
