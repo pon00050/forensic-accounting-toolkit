@@ -15,9 +15,6 @@ MODE="${1:-full}"
 # Source shared config (paths, repo list, GH CLI, test commands)
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ecosystem.conf"
 
-# Use ALL_REPOS from ecosystem.conf
-REPOS=("${ALL_REPOS[@]}")
-
 # Helper: get file modification epoch timestamp (Windows/Git Bash compatible)
 file_epoch() {
     local file="$1"
@@ -25,20 +22,7 @@ file_epoch() {
         echo "0"
         return
     fi
-    # Try GNU stat first, then date -r fallback
     stat -c '%Y' "$file" 2>/dev/null || date -r "$file" '+%s' 2>/dev/null || echo "0"
-}
-
-# Helper: days since epoch timestamp
-days_since() {
-    local epoch="$1"
-    local now
-    now=$(date '+%s')
-    if [ "$epoch" -eq 0 ]; then
-        echo "unknown"
-        return
-    fi
-    echo $(( (now - epoch) / 86400 ))
 }
 
 echo "=== TRIAGE SCAN (mode: $MODE, $(date '+%Y-%m-%d %H:%M')) ==="
@@ -78,31 +62,24 @@ echo ""
 # SOURCE 2: Git hygiene
 # ─────────────────────────────────────────────
 echo "--- GIT HYGIENE ---"
-for repo in "${REPOS[@]}"; do
+for repo in "${ALL_REPOS[@]}"; do
     dir="$BASE/$repo"
-    if [ ! -d "$dir/.git" ]; then
-        continue
-    fi
+    [ -d "$dir/.git" ] || continue
 
-    uncommitted=$(cd "$dir" && git status --porcelain 2>/dev/null | head -20)
-    unpushed=$(cd "$dir" && git log --oneline @{upstream}..HEAD 2>/dev/null || true)
-    last_commit=$(cd "$dir" && git log -1 --format='%cr' 2>/dev/null || echo "unknown")
+    uncommitted=$(git -C "$dir" status --porcelain 2>/dev/null | head -20)
+    unpushed=$(git -C "$dir" log --oneline @{upstream}..HEAD 2>/dev/null || true)
+    last_commit=$(git -C "$dir" log -1 --format='%cr' 2>/dev/null || echo "unknown")
 
     status="CLEAN"
-    details=""
     if [ -n "$uncommitted" ]; then
         count=$(echo "$uncommitted" | wc -l | tr -d ' ')
         status="UNCOMMITTED"
-        details="$count files"
     fi
     if [ -n "$unpushed" ]; then
-        up_count=$(echo "$unpushed" | wc -l | tr -d ' ')
         if [ "$status" = "CLEAN" ]; then
             status="UNPUSHED"
-            details="$up_count commits"
         else
             status="UNCOMMITTED+UNPUSHED"
-            details="$details, $up_count unpushed"
         fi
     fi
 
@@ -114,7 +91,7 @@ for repo in "${REPOS[@]}"; do
         echo "$unpushed" | sed 's/^/    >> /'
     fi
     # Recent commit subjects — enables LLM to cross-reference board claims vs actual work
-    recent=$(cd "$dir" && git log --oneline -5 --format='%s' 2>/dev/null | sed 's/^/    ~ /')
+    recent=$(git -C "$dir" log --oneline -5 --format='%s' 2>/dev/null | sed 's/^/    ~ /')
     if [ -n "$recent" ]; then
         echo "$recent"
     fi
@@ -126,7 +103,6 @@ echo ""
 # ─────────────────────────────────────────────
 echo "--- BACKLOG ---"
 if [ -f "$HUB/ECOSYSTEM.md" ]; then
-    # Extract unchecked items with their priority section
     current_priority=""
     while IFS= read -r line; do
         if [[ "$line" =~ ^###[[:space:]]+(P[0-9]) ]]; then
@@ -147,11 +123,8 @@ echo ""
 echo "--- BOARD FRESHNESS ---"
 if [ -n "${BOARD_JSON:-}" ] && [ -f "$HUB/ECOSYSTEM.md" ]; then
     stale_count=0
-    # Extract board Todo titles and check against ECOSYSTEM.md checked items
     while IFS= read -r title; do
         [ -z "$title" ] && continue
-        # Search for matching checked items in ECOSYSTEM.md (case-insensitive partial match)
-        # Normalize: strip leading/trailing whitespace
         match=$(grep -i "\[x\].*$(echo "$title" | sed 's/[]\/$*.^[]/\\&/g' | cut -c1-30)" "$HUB/ECOSYSTEM.md" 2>/dev/null | head -1)
         if [ -n "$match" ]; then
             echo "  [STALE] \"$title\" — ECOSYSTEM.md shows completed"
@@ -191,7 +164,6 @@ if [ -d "$HUB/cross-issues" ]; then
     for f in "$HUB"/cross-issues/*.md; do
         [ -f "$f" ] || continue
         basename=$(basename "$f" .md)
-        # Extract Status line
         status_line=$(grep -m1 '^\*\*Status\*\*' "$f" 2>/dev/null || echo "Status: unknown")
         echo "  $basename: $status_line"
     done
@@ -205,32 +177,25 @@ echo ""
 # ─────────────────────────────────────────────
 echo "--- CODE SIGNALS ---"
 total_signals=0
-for repo in "${REPOS[@]}"; do
+for repo in "${ALL_REPOS[@]}"; do
     dir="$BASE/$repo"
     [ -d "$dir" ] || continue
 
-    # Search Python files only, exclude common noise directories
-    count=$(find "$dir" -type f -name '*.py' \
+    # Single find pass: collect matches, count and display from same result
+    matches=$(find "$dir" -type f -name '*.py' \
         ! -path '*/.venv/*' \
         ! -path '*/__pycache__/*' \
         ! -path '*/.eggs/*' \
         ! -path '*/build/*' \
         ! -path '*/node_modules/*' \
         ! -path '*/.git/*' \
-        -exec grep -l 'TODO\|FIXME\|HACK\|NotImplementedError' {} \; 2>/dev/null | wc -l | tr -d ' ')
+        -exec grep -Hn 'TODO\|FIXME\|HACK\|NotImplementedError' {} \; 2>/dev/null)
 
-    if [ "$count" -gt 0 ]; then
+    if [ -n "$matches" ]; then
+        # Count unique files from grep -Hn output (file:line:match)
+        count=$(echo "$matches" | cut -d: -f1 | sort -u | wc -l | tr -d ' ')
         echo "  $repo: $count files with TODO/FIXME/HACK/NotImplementedError"
-        # Show up to 5 specific signals
-        find "$dir" -type f -name '*.py' \
-            ! -path '*/.venv/*' \
-            ! -path '*/__pycache__/*' \
-            ! -path '*/.eggs/*' \
-            ! -path '*/build/*' \
-            ! -path '*/node_modules/*' \
-            ! -path '*/.git/*' \
-            -exec grep -Hn 'TODO\|FIXME\|HACK\|NotImplementedError' {} \; 2>/dev/null | head -5 | while read -r line; do
-            # Strip the base path for readability
+        echo "$matches" | head -5 | while read -r line; do
             echo "    ${line#$BASE/}"
         done
         total_signals=$((total_signals + count))
@@ -245,14 +210,9 @@ echo ""
 # SOURCE 6: Data freshness (parquet sync)
 # ─────────────────────────────────────────────
 echo "--- DATA FRESHNESS ---"
-SRC_DIR="$BASE/kr-forensic-finance/01_Data/processed"
-DST_DIR="$BASE/kr-derivatives/data/input"
-
-parquets=(price_volume.parquet cb_bw_events.parquet corp_actions.parquet)
-
-for pq in "${parquets[@]}"; do
-    src_file="$SRC_DIR/$pq"
-    dst_file="$DST_DIR/$pq"
+for pq in "${PARQUET_FILES[@]}"; do
+    src_file="$PIPELINE_SRC/$pq"
+    dst_file="$PIPELINE_DST/$pq"
 
     if [ ! -f "$src_file" ]; then
         echo "  [MISSING] $pq — not in kr-forensic-finance output"
@@ -282,7 +242,7 @@ echo ""
 echo "--- CHANGELOG FRESHNESS ---"
 changelog="$HUB/CHANGELOG.md"
 if [ -f "$changelog" ]; then
-    last_date=$(grep -oE '^## [0-9]{4}-[0-9]{2}-[0-9]{2}' "$changelog" 2>/dev/null | head -1 | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}')
+    last_date=$(grep -m1 -oE '^## [0-9]{4}-[0-9]{2}-[0-9]{2}' "$changelog" 2>/dev/null | sed 's/^## //')
     if [ -n "$last_date" ]; then
         echo "  Last CHANGELOG entry: $last_date"
         today=$(date '+%Y-%m-%d')
@@ -304,22 +264,19 @@ echo ""
 # ─────────────────────────────────────────────
 echo "--- CONVENTION QUICK-CHECK ---"
 conv_drift=0
-for repo in "${REPOS[@]}"; do
+for repo in "${ALL_REPOS[@]}"; do
     dir="$BASE/$repo"
     [ -d "$dir" ] || continue
 
     issues=""
-    # Check 1: CLAUDE.md exists
     if [ ! -f "$dir/CLAUDE.md" ]; then
         issues="${issues}CLAUDE.md "
     fi
-    # Check 2: .claude/ directory exists (exception: repos without pyproject.toml)
     if [ -f "$dir/pyproject.toml" ] && [ "$repo" != "jfia-catalog" ] && [ ! -d "$dir/.claude" ]; then
         issues="${issues}.claude/ "
     fi
-    # Check 3: uv.lock tracked (if pyproject.toml exists, exception: jfia-catalog)
     if [ "$repo" != "jfia-catalog" ] && [ -f "$dir/pyproject.toml" ]; then
-        if ! (cd "$dir" && git ls-files --error-unmatch uv.lock >/dev/null 2>&1); then
+        if ! git -C "$dir" ls-files --error-unmatch uv.lock >/dev/null 2>&1; then
             issues="${issues}uv.lock "
         fi
     fi
@@ -348,11 +305,9 @@ for repo in "${REPOS_WITH_TESTS[@]}"; do
 
     claimed="${CLAUDE_COUNTS[$repo]:-}"
     if [ -z "$claimed" ]; then
-        # No claim in CLAUDE.md for this repo — skip silently
         continue
     fi
 
-    # Collect actual test count
     collect_cmd=$(test_collect_cmd "$repo")
     actual=$(cd "$dir" && eval "$collect_cmd" 2>/dev/null | tail -1 | sed 's/[^0-9]*//' | grep -oE '^[0-9]+' || echo "?")
 
@@ -374,15 +329,15 @@ echo ""
 # SOURCE 9: Stale branches
 # ─────────────────────────────────────────────
 echo "--- STALE BRANCHES ---"
-for repo in "${REPOS[@]}"; do
+for repo in "${ALL_REPOS[@]}"; do
     dir="$BASE/$repo"
     [ -d "$dir/.git" ] || continue
 
-    branch_count=$(cd "$dir" && git branch --list 2>/dev/null | wc -l | tr -d ' ')
+    branches=$(git -C "$dir" branch --list 2>/dev/null)
+    branch_count=$(echo "$branches" | wc -l | tr -d ' ')
     if [ "$branch_count" -gt 3 ]; then
-        branches=$(cd "$dir" && git branch --list 2>/dev/null | sed 's/^/    /')
         echo "  [WARN] $repo — $branch_count branches"
-        echo "$branches"
+        echo "$branches" | sed 's/^/    /'
     fi
 done
 echo "  (flagged if >3 branches)"
@@ -394,8 +349,8 @@ echo ""
 echo "--- DEPENDENCY CHAIN ---"
 
 # Check: kr-derivatives data/input/ exists and has parquets
-if [ -d "$DST_DIR" ]; then
-    pq_count=$(find "$DST_DIR" -name '*.parquet' 2>/dev/null | wc -l | tr -d ' ')
+if [ -d "$PIPELINE_DST" ]; then
+    pq_count=$(find "$PIPELINE_DST" -name '*.parquet' 2>/dev/null | wc -l | tr -d ' ')
     if [ "$pq_count" -eq 0 ]; then
         echo "  [BLOCKED] kr-derivatives has no input parquets — run: bash ecosystem.sh copy-parquets"
     else
@@ -406,7 +361,7 @@ else
 fi
 
 # Check: pyproject.toml uses hatchling (all repos with pyproject.toml, except jfia-catalog)
-for repo in "${REPOS[@]}"; do
+for repo in "${ALL_REPOS[@]}"; do
     pptoml="$BASE/$repo/pyproject.toml"
     if [ "$repo" != "jfia-catalog" ] && [ "$repo" != "forensic-accounting-toolkit" ] && [ -f "$pptoml" ]; then
         if ! grep -q 'hatchling' "$pptoml" 2>/dev/null; then
@@ -415,10 +370,10 @@ for repo in "${REPOS[@]}"; do
     fi
 done
 
-# Check: kr-forensic-finance has its pipeline outputs
-if [ -d "$SRC_DIR" ]; then
-    for pq in price_volume.parquet cb_bw_events.parquet; do
-        if [ ! -f "$SRC_DIR/$pq" ]; then
+# Check: kr-forensic-finance has its pipeline outputs (uses shared PARQUET_FILES)
+if [ -d "$PIPELINE_SRC" ]; then
+    for pq in "${PARQUET_FILES[@]}"; do
+        if [ ! -f "$PIPELINE_SRC/$pq" ]; then
             echo "  [WARN] kr-forensic-finance missing $pq in processed output"
         fi
     done

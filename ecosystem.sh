@@ -65,13 +65,11 @@ cmd_status() {
     echo "=== Git status across ecosystem ==="
     for repo in "${ALL_REPOS[@]}"; do
         local dir="$BASE/$repo"
-        if [ ! -d "$dir/.git" ]; then
-            continue
-        fi
+        [ -d "$dir/.git" ] || continue
         local status
-        status=$(cd "$dir" && git status --short 2>/dev/null)
+        status=$(git -C "$dir" status --short 2>/dev/null)
         local unpushed
-        unpushed=$(cd "$dir" && git log --oneline @{upstream}..HEAD 2>/dev/null || true)
+        unpushed=$(git -C "$dir" log --oneline @{upstream}..HEAD 2>/dev/null || true)
         if [ -z "$status" ] && [ -z "$unpushed" ]; then
             echo "  [OK] $repo"
         else
@@ -90,19 +88,8 @@ cmd_status() {
 cmd_copy_parquets() {
     echo "=== Copying pipeline outputs to downstream inputs ==="
 
-    # kr-forensic-finance → kr-derivatives
-    local src="$BASE/kr-forensic-finance/01_Data/processed"
-    local dst="$BASE/kr-derivatives/data/input"
-
-    local files=(
-        price_volume.parquet
-        cb_bw_events.parquet
-        corp_actions.parquet
-    )
-
-    for f in "${files[@]}"; do
-        if [ -f "$src/$f" ]; then
-            cp "$src/$f" "$dst/$f"
+    for f in "${PARQUET_FILES[@]}"; do
+        if cp "$PIPELINE_SRC/$f" "$PIPELINE_DST/$f" 2>/dev/null; then
             echo "  [OK] $f → kr-derivatives/data/input/"
         else
             echo "  [--] $f — not found in kr-forensic-finance output"
@@ -115,11 +102,9 @@ cmd_unpushed() {
     local found=0
     for repo in "${ALL_REPOS[@]}"; do
         local dir="$BASE/$repo"
-        if [ ! -d "$dir/.git" ]; then
-            continue
-        fi
+        [ -d "$dir/.git" ] || continue
         local unpushed
-        unpushed=$(cd "$dir" && git log --oneline @{upstream}..HEAD 2>/dev/null || true)
+        unpushed=$(git -C "$dir" log --oneline @{upstream}..HEAD 2>/dev/null || true)
         if [ -n "$unpushed" ]; then
             echo "  $repo:"
             echo "$unpushed" | sed 's/^/    /'
