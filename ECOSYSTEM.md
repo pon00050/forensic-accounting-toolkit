@@ -25,7 +25,7 @@ See `cross-issues/` for details. Summary:
 
 | ID | Title | Source | Fix Location | Status |
 |----|-------|--------|-------------|--------|
-| XB-001 | Split-adjusted prices needed | kr-derivatives Run 1 | kr-forensic-finance `extract_price_volume.py` | **ACTIVE** |
+| XB-001 | Split-adjusted prices needed | kr-derivatives Run 1 | kr-forensic-finance `extract_price_volume.py` | **FIXED** (2026-03-15, `9b99bfb`) |
 | XB-002 | SEIBRO API resultCode=99 | kr-forensic-finance | External (KSD approval) | **ACTIVE** (non-critical) |
 
 ---
@@ -33,7 +33,7 @@ See `cross-issues/` for details. Summary:
 ## Technical Backlog (Prioritized)
 
 ### P0 — Enables credible demo and outreach
-- [ ] Fix split-adjusted prices in kr-forensic-finance (XB-001)
+- [x] Fix split-adjusted prices in kr-forensic-finance (XB-001) ✓ (2026-03-15)
 - [x] Publish 5 repos to GitHub (beneish, derivatives, calendar, jfia-catalog, jfia-forensic) ✓ (2026-03-15)
 - [x] Add CLAUDE.md to kr-trading-calendar ✓ (2026-03-15)
 - [x] Commit pending README changes in kr-trading-calendar ✓ (2026-03-15)

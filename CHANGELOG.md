@@ -4,6 +4,16 @@ Audit trail for ecosystem-wide changes coordinated from this hub.
 
 ---
 
+## 2026-03-15 — XB-001 Fix: Split-Adjusted Prices
+
+- Fixed `02_Pipeline/extract_price_volume.py` in kr-forensic-finance: explicitly pass `adjusted=True` to `pykrx.stock.get_market_ohlcv_by_date`
+- Prior data had unadjusted prices causing false moneyness signals (ticker 224060 showed 334x moneyness, 254 rows >10x contaminated, flag rate inflated to 49.3%)
+- Commit `9b99bfb`, pushed to GitHub. Issue #1 auto-closed.
+- 317 tests pass. Re-extraction of `price_volume.parquet` in progress.
+- Unblocks: kr-derivatives Run 2 (P1)
+
+---
+
 ## 2026-03-15 — Ecosystem Standardization
 
 ### Phase 0: Toolkit Hub
