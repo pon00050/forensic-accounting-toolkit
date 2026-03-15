@@ -1,0 +1,89 @@
+# Forensic Accounting Toolkit — Coordination Hub
+
+This is **not a code project**. It is the orchestration layer for a multi-repo Korean forensic accounting ecosystem. All code lives in sibling directories under `C:\Users\pon00\Projects\`.
+
+---
+
+## The Ecosystem
+
+Seven projects, one platform. Each is an independent git repo with its own CLAUDE.md.
+
+### Foundation Libraries (standalone, no cross-imports)
+
+| Project | Path | Purpose | Tests |
+|---------|------|---------|-------|
+| **kr-company-registry** | `../kr-company-registry` | DART↔KRX↔BRN↔CRN identifier crosswalk (3,949 companies) | 18 |
+| **kr-trading-calendar** | `../kr-trading-calendar` | KRX trading-day math (holidays, offsets, ranges) | 10 |
+| **kr-beneish** | `../kr-beneish` | Beneish M-Score for Korean IFRS companies | 53 |
+| **jfia-catalog** | `../jfia-catalog` | 469 JFIA forensic accounting articles (structured JSON) | — |
+
+### Analysis Libraries (standalone, consume data files not code)
+
+| Project | Path | Purpose | Tests |
+|---------|------|---------|-------|
+| **kr-derivatives** | `../kr-derivatives` | CB/BW option pricing + ITM issuance detection | 67 |
+| **jfia-forensic** | `../jfia-forensic` | Detectlet schema, JFIA enrichment pipeline, signal vocabulary | 36 |
+
+### Platform (consumes all of the above)
+
+| Project | Path | Purpose | Tests |
+|---------|------|---------|-------|
+| **kr-forensic-finance** | `../kr-forensic-finance` | 14 extractors, 4 analysis phases, CLI, FastAPI, MCP server | 306 |
+
+### Related (not core, potentially relevant)
+
+| Project | Path | Purpose |
+|---------|------|---------|
+| **kr-real-estate** | `../kr-real-estate` | Korean real estate market analysis (early stage) |
+
+---
+
+## Dependency Graph
+
+```
+jfia-catalog ──► jfia-forensic ──► kr-forensic-finance (MCP tool #11)
+                                          ▲
+kr-company-registry ──────────────────────┤ (corp_code ↔ ticker)
+kr-trading-calendar ──────────────────────┤ (trading-day math)
+kr-beneish ───────────────────────────────┤ (M-Score computation)
+kr-derivatives ───────────────────────────┘ (CB/BW scoring; reads parquets)
+```
+
+Libraries are standalone. kr-forensic-finance is the integration point.
+kr-derivatives reads **data files** from kr-forensic-finance (not code imports).
+
+---
+
+## How to Navigate
+
+- **Cross-project blockers**: `cross-issues/` in this directory
+- **Business outreach & deadlines**: `business/` in this directory
+- **Per-project details**: Read the CLAUDE.md in each project's root
+- **Platform strategy docs**: `../kr-forensic-finance/00_Reference/10_Platform_Strategy/`
+- **Ecosystem status**: `ECOSYSTEM.md` in this directory
+
+---
+
+## Conventions (apply to all projects)
+
+- **Package manager**: `uv` (never pip)
+- **Python**: 3.11+ (3.10+ for kr-beneish)
+- **Testing**: `uv run pytest tests/ -v`
+- **Git**: Never amend published commits. New commits only.
+- **Claude API model routing**: Haiku for classification, Sonnet for synthesis, never Opus
+- **Data files**: Parquet for pipeline artifacts, CSV for human-readable outputs
+- **Constants**: All magic strings/thresholds in `constants.py` per project
+- **Paths**: All paths in `_paths.py` or `paths.py` per project
+
+---
+
+## When Working in This Directory
+
+You are in the coordination hub. Your job here is to:
+1. Track cross-project blockers (not per-project bugs — those stay in each repo)
+2. Maintain the ecosystem map and publication status
+3. Track business outreach tasks and deadlines
+4. Help the human decide what to work on next across all projects
+
+Do NOT write code here. Do NOT duplicate information that belongs in a sub-project's own docs.
+When you need to understand a sub-project, read its CLAUDE.md first.
