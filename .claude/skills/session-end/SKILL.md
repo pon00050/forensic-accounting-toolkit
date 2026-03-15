@@ -3,19 +3,19 @@ name: session-end
 description: End-of-session audit — verify all repos clean, board current, nothing forgotten
 user-invocable: true
 disable-model-invocation: true
-allowed-tools: Bash, Read
+allowed-tools: Bash, Read, Glob
 ---
 
 Run an end-of-session audit before the human closes the terminal. This is a read-only check.
 
 ## Steps
 
-1. **Check all 8 repos for uncommitted changes:**
-   For each repo in `C:\Users\pon00\Projects\`:
-   - forensic-accounting-toolkit, kr-forensic-finance, kr-company-registry, kr-beneish,
-     kr-derivatives, kr-trading-calendar, jfia-catalog, jfia-forensic
-   - `git status --short` — flag any with uncommitted changes
-   - `git log --oneline @{upstream}..HEAD 2>/dev/null` — flag any with unpushed commits
+1. **Check all repos for uncommitted/unpushed changes:**
+   ```bash
+   bash ecosystem.sh status
+   ```
+   This checks all 8 repos for uncommitted changes and unpushed commits in one command.
+   If the script is unavailable, fall back to manual iteration over repos in `C:\Users\pon00\Projects\`.
 
 2. **Check the board for stale items:**
    ```bash
@@ -52,6 +52,26 @@ Run an end-of-session audit before the human closes the terminal. This is a read
 
 5. If everything is clean, end with: "All clear. Safe to close."
    If issues exist, list them clearly so the human can decide what to address.
+
+6. **Uncaptured content review.**
+   Check `content/captures/` for files created today. Compare against the session's
+   work (commits made today across all repos, board items moved to Done).
+
+   If significant work was done but no captures exist for it:
+   ```
+   Content:
+     [!!] Session involved notable work with no content capture:
+          - {repo}: {description of work} ({content-worthy pattern})
+          Consider: /capture {title}
+   ```
+
+   If captures already cover the session's work, or the session was routine:
+   ```
+   Content:
+     [OK] N captures created this session
+   ```
+
+   Keep this section brief — 2-3 lines max. It's informational, not blocking.
 
 ## Rules
 

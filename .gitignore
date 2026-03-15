@@ -1,6 +1,10 @@
 knowledge/
+content/
 .venv/
 __pycache__/
 *.pyc
 .env
 .claude/agent-memory/
+.claude/projects/
+.claude/settings.local.json
+triage-last.json

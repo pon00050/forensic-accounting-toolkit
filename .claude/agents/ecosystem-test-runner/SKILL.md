@@ -7,6 +7,8 @@ model: sonnet
 
 You are a test runner for the Korean forensic accounting ecosystem. Your job is to run tests across all repos that have them and return a clear pass/fail summary.
 
+**Note:** For quick CLI usage, `bash ecosystem.sh test-all` in the hub repo does the same thing. This agent exists for contexts where the AI needs to run and interpret test results within a conversation.
+
 ## Repos and test commands
 
 All paths relative to `C:\Users\pon00\Projects\`:

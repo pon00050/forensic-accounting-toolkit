@@ -14,21 +14,21 @@ Seven projects, one platform. Each is an independent git repo with its own CLAUD
 |---------|------|---------|-------|
 | **kr-company-registry** | `../kr-company-registry` | DART↔KRX↔BRN↔CRN identifier crosswalk (3,949 companies) | 18 |
 | **kr-trading-calendar** | `../kr-trading-calendar` | KRX trading-day math (holidays, offsets, ranges) | 10 |
-| **kr-beneish** | `../kr-beneish` | Beneish M-Score for Korean IFRS companies | 53 |
+| **kr-beneish** | `../kr-beneish` | Beneish M-Score for Korean IFRS companies | 61 |
 | **jfia-catalog** | `../jfia-catalog` | 469 JFIA forensic accounting articles (structured JSON) | — |
 
 ### Analysis Libraries (standalone, consume data files not code)
 
 | Project | Path | Purpose | Tests |
 |---------|------|---------|-------|
-| **kr-derivatives** | `../kr-derivatives` | CB/BW option pricing + ITM issuance detection | 67 |
-| **jfia-forensic** | `../jfia-forensic` | Detectlet schema, JFIA enrichment pipeline, signal vocabulary | 36 |
+| **kr-derivatives** | `../kr-derivatives` | CB/BW option pricing + ITM issuance detection | 79 |
+| **jfia-forensic** | `../jfia-forensic` | Detectlet schema, JFIA enrichment pipeline, signal vocabulary | 76 |
 
 ### Platform (consumes all of the above)
 
 | Project | Path | Purpose | Tests |
 |---------|------|---------|-------|
-| **kr-forensic-finance** | `../kr-forensic-finance` | 14 extractors, 4 analysis phases, CLI, FastAPI, MCP server | 306 |
+| **kr-forensic-finance** | `../kr-forensic-finance` | 15 extractors, 4 analysis phases, CLI, FastAPI, MCP server | 306 |
 
 ### Related (not core, potentially relevant)
 
@@ -61,6 +61,27 @@ kr-derivatives reads **data files** from kr-forensic-finance (not code imports).
 - **Per-project details**: Read the CLAUDE.md in each project's root
 - **Platform strategy docs**: `../kr-forensic-finance/00_Reference/10_Platform_Strategy/`
 - **Ecosystem status**: `ECOSYSTEM.md` in this directory
+- **Cross-repo operations**: `bash ecosystem.sh <command>` (see below)
+- **Step-by-step workflows**: `WORKFLOW.md` in this directory
+
+---
+
+## Cross-Repo Operations (`ecosystem.sh`)
+
+The hub contains `ecosystem.sh` for common multi-repo tasks. Run from the hub directory:
+
+```bash
+bash ecosystem.sh test-all          # Run tests in all repos, report pass/fail
+bash ecosystem.sh test <repo>       # Run tests in one repo
+bash ecosystem.sh status            # Git status across all repos
+bash ecosystem.sh copy-parquets     # Copy kr-forensic-finance outputs → kr-derivatives inputs
+bash ecosystem.sh unpushed          # Show repos with unpushed commits
+```
+
+**When to use:**
+- `copy-parquets` — before any kr-derivatives screen run (ensures input data is current)
+- `status` / `unpushed` — before pushing, at session end, or when unsure what's committed where
+- `test-all` — after dependency upgrades or convention changes touching multiple repos
 
 ---
 
@@ -83,12 +104,15 @@ Skills are invoked with `/skill-name`. They live in `.claude/skills/`.
 
 | Skill | Trigger | What it does |
 |-------|---------|-------------|
+| `/triage` | Start of session (auto), or "what needs doing?" | Scans 10 sources (board, git, data freshness, code signals, conventions, backlog) and ranks next actions |
 | `/board` | Start of session, or "what should I work on?" | Shows project board grouped by status/priority, suggests execution order |
 | `/plan` | Before starting non-trivial work, or "analyze the ecosystem" | 5-layer ecosystem analysis: board state, repo health, convention drift, integration gaps, strategic alignment |
 | `/plan conventions` | After code changes across repos, or convention audit needed | Full convention checklist audit via convention-auditor agent |
 | `/diagnose-moneyness` | **After any kr-derivatives screen run that produces outliers with moneyness >10x** | Queries DART API for CB filings and corporate actions, checks pykrx adjusted vs unadjusted prices, classifies each case as SPLIT_ARTIFACT / GENUINE_ITM / DATA_ERROR / INCONCLUSIVE |
 | `/work` | "Work on it" or picking a task from the board | Executes the next AI task autonomously |
-| `/done` | After completing a task | Updates board status and ECOSYSTEM.md |
+| `/done` | After completing a task | Updates board status, ECOSYSTEM.md, syncs counts, cascade scan for new/unblocked work |
+| `/capture` | After content-worthy work, or when `/done` suggests it | Writes structured record to `content/captures/` |
+| `/content` | "Show content pipeline" or reviewing what's been captured | Displays captures, drafts, and ideas with status |
 | `/ecosystem-status` | "What's the status?" | Shows publication and blocker status |
 
 ### When to use `/diagnose-moneyness`
@@ -153,10 +177,12 @@ How the AI agent works through tasks autonomously:
 2. **Filter** to `Owner == AI`, `Status != Done`, sort by priority (P0 first)
 3. **Pick** the next unblocked item, `cd` to the correct project directory
 4. **Read** that project's `CLAUDE.md` first — it contains install, test, architecture, and conventions
-5. **Execute** the task: write code, run tests, commit with descriptive messages
-6. **Update the board** status via `gh` CLI
-7. **Update `ECOSYSTEM.md`** if publication status or blocker status changed
-8. **Move to next item**
+5. **Pre-flight**: if the task involves kr-derivatives screen runs, run `bash ecosystem.sh copy-parquets` first to sync pipeline outputs
+6. **Execute** the task: write code, run tests, commit with descriptive messages
+7. **Update the board** status via `gh` CLI
+8. **Update `ECOSYSTEM.md`** if publication status or blocker status changed
+9. **Post-flight**: `bash ecosystem.sh unpushed` to verify nothing was left behind
+10. **Move to next item**
 
 If anything unexpected is encountered (test failure, missing file, structure mismatch), document it in `CHANGELOG.md` before proceeding — never silently work around it.
 

@@ -1,7 +1,8 @@
 # XB-001: Split-Adjusted Prices Needed in price_volume.parquet
 
-**Status**: ACTIVE
+**Status**: RESOLVED (2026-03-15, commit `9b99bfb`)
 **Discovered**: 2026-03-15 (kr-derivatives Run 1)
+**Resolved**: 2026-03-15 — split-adjusted prices implemented in `extract_price_volume.py`
 **Source**: `../kr-derivatives/reports/first_run_lessons.md`
 **Fix location**: `../kr-forensic-finance/02_Pipeline/extract_price_volume.py`
 **Detailed plan**: `../kr-derivatives/reports/second_run_prep.md` (Change 1)

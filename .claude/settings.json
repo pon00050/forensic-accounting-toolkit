@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/session-start.sh"
+            "command": "bash C:/Users/pon00/Projects/forensic-accounting-toolkit/.claude/hooks/session-start.sh"
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/pre-commit-test-guard.py"
+            "command": "python C:/Users/pon00/Projects/forensic-accounting-toolkit/.claude/hooks/pre-commit-test-guard.py"
           }
         ]
       }
@@ -28,7 +28,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/post-push-reminder.py"
+            "command": "python C:/Users/pon00/Projects/forensic-accounting-toolkit/.claude/hooks/post-push-reminder.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'echo \"--- SESSION END CHECK ---\" && cd /c/Users/pon00/Projects/forensic-accounting-toolkit && bash ecosystem.sh status 2>/dev/null | grep -v CLEAN | head -10 && echo \"---\"'"
           }
         ]
       }

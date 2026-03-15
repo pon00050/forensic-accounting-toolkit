@@ -3,7 +3,7 @@ name: done
 description: Complete a board task — commit, push, update board status, log to CHANGELOG
 user-invocable: true
 disable-model-invocation: true
-allowed-tools: Bash, Read, Edit, Write
+allowed-tools: Bash, Read, Edit, Write, Glob
 ---
 
 Wrap up a completed board task with full bookkeeping. The argument `$ARGUMENTS` is the task title or keyword to match on the board (optional — if omitted, infer from recent work context).
@@ -35,12 +35,80 @@ Wrap up a completed board task with full bookkeeping. The argument `$ARGUMENTS` 
    - Did a backlog item get completed?
    - If yes, update it. If no, skip.
 
-6. **Commit and push the toolkit hub** (CHANGELOG.md and ECOSYSTEM.md changes)
+5b. **Sync hub CLAUDE.md counts.** After updating ECOSYSTEM.md, verify test counts and extractor counts are current:
+   - Run `uv run pytest tests/ --co -q` in the completed repo (or `python -m pytest tests/ --co -q` for kr-forensic-finance). Parse the test count from the last line.
+   - Compare to the count shown in hub `CLAUDE.md` ecosystem table. If different, update the number.
+   - If the repo is kr-forensic-finance, also count `.py` files matching `02_Pipeline/extract_*.py`. If the count differs from CLAUDE.md's "N extractors" claim, update it.
+   - Only touch CLAUDE.md if a number actually changed.
+
+5c. **Sync cross-issue files.** If the completed task resolves a cross-issue:
+   - Update `cross-issues/XB-NNN.md` status from ACTIVE to RESOLVED with date and commit hash
+   - Example: `**Status**: RESOLVED (2026-03-15, commit \`abc1234\`)`
+
+6. **Commit and push the toolkit hub** (CHANGELOG.md, ECOSYSTEM.md, CLAUDE.md, cross-issues changes)
 
 7. **Report summary:**
    - What was closed
    - Board status
    - One-line "Next unblocked AI task: ..." suggestion
+   - "Run /triage to rescan for newly unblocked tasks."
+
+8. **Content assessment.** Review what was just completed and assess whether it
+   involved any of these content-worthy patterns:
+
+   - A plan or approach failed and we pivoted to an alternative
+   - A new API endpoint, data source, or technique was discovered
+   - A significant metric improvement was achieved (quantify: before → after)
+   - A multi-step debugging or investigation sequence resolved
+   - A cross-repo integration issue was identified and fixed
+   - A domain-specific insight emerged (regulatory, accounting, market structure)
+
+   If NONE match: skip silently. Do not mention content at all.
+
+   If ANY match: suggest ONE specific /capture command at the end of the report.
+   Format:
+
+   ```
+   Content: This task involved [pattern]. Consider:
+     /capture {suggested-title}
+   ```
+
+   Do NOT auto-run /capture. The human decides.
+
+9. **Cascade scan.** After all bookkeeping, actively search for new work created or unblocked by the completion. Check these 6 sources:
+
+   | Source | What to check | How |
+   |--------|--------------|-----|
+   | Downstream data | Did this change data files consumed by other repos? | Check if any parquets in `kr-forensic-finance/01_Data/processed/` are newer than copies in `kr-derivatives/data/input/`. If so: `[DATA REFRESH]` |
+   | Test ripple | Did downstream tests break? | Run `uv run pytest tests/ -x -q` in repos that consume outputs from the changed repo. If failures: `[TEST FAILURE]` |
+   | Convention drift | Did the change introduce convention violations? | Quick check: new files without constants.py patterns, new extractors not counted, missing conftest.py. If drift: `[CONVENTION]` |
+   | Unblocked items | Did this unblock board items or backlog items? | Check board Todo and ECOSYSTEM.md backlog for items that reference the completed task or its repo. If unblocked: `[UNBLOCKED]` |
+   | New TODOs | Did the committed code introduce new TODOs? | `git diff HEAD~1 HEAD` in the repo, grep for TODO/FIXME/HACK. If new: `[NEW TODO]` |
+   | Cross-issue cascade | Did resolving a cross-issue unblock other work? | Check `cross-issues/` for items that reference the resolved issue. If unblocked: `[CROSS-ISSUE]` |
+
+   Output format (appended to the report):
+
+   ```
+   Cascade scan:
+     [UNBLOCKED] kr-derivatives Run 4 — XB-001 resolved, Run 3 complete
+     [DATA REFRESH] kr-derivatives inputs may need sync → bash ecosystem.sh copy-parquets
+     [CLEAN] No new TODOs, no test failures, no convention drift
+
+   Discovered tasks: 1
+     → kr-derivatives Run 4 (resolve 32 remaining >10x moneyness outliers)
+
+   Recommended: /work kr-derivatives
+   ```
+
+   If cascade finds nothing: `Cascade: clean — no new tasks discovered.`
+
+   Skip sources that clearly don't apply (e.g., don't check downstream data if the task was documentation-only). Only run downstream tests if the change modified code or data files, not docs.
+
+10. **Lessons check.** If the task involved fixing a mistake that the system made (stale data echoed, wrong recommendation, convention violation missed), append a one-line lesson to `C:\Users\pon00\Projects\forensic-accounting-toolkit\lessons.md` with the date and what was learned. Only add lessons for systemic issues — not one-off bugs. Format:
+
+    ```
+    - **Lesson title.** Description of the rule. (Learned: YYYY-MM-DD, context)
+    ```
 
 ## Board Reference
 
