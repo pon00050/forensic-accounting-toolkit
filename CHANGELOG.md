@@ -4,6 +4,18 @@ Audit trail for ecosystem-wide changes coordinated from this hub.
 
 ---
 
+## 2026-03-16 — kr-derivatives Run 4: Resolve >10x Moneyness Outliers
+
+- Investigated 10 outlier companies (32 rows with moneyness >10x) using DART `stockTotqySttus.json`, `crDecsn.json`, and `irdsSttus.json` (277 API calls)
+- Created `kr-derivatives/data/curated/manual_k_adjustments.csv` (7 entries) and `excluded_corp_codes.csv` (1 entry)
+- Updated `kr-derivatives/examples/02_issuance_dilution_screen.py` to consume curated CSVs — merged manual adjustments into `build_adjustment_factors()`
+- Created standalone research script at `kr-derivatives/research/research_stock_totqy.py`
+- Run 4 results: flag rate 34.0%→33.1%, moneyness >10x: 32→4 rows (only 2 confirmed GENUINE_ITM companies remain)
+- 4 content captures written (stockTotqySttus discovery, price-drop correction, invisible consolidation, architectural decisions)
+- Commit `dee6c35`, 79 tests pass, pushed to GitHub
+
+---
+
 ## 2026-03-15 — Close the Task Loop
 
 - Added README.md to forensic-accounting-toolkit for GitHub landing page (commit `f625078`)

@@ -1,6 +1,6 @@
 # Ecosystem Status
 
-> Last updated: 2026-03-15
+> Last updated: 2026-03-16
 
 ---
 
@@ -41,7 +41,7 @@ See `cross-issues/` for details. Summary:
 ### P1 — This month
 - [x] kr-derivatives Run 2 (after XB-001 fix) ✓ (2026-03-15) — flag rate unchanged at 49.3%, identified denomination mismatch root cause
 - [x] kr-derivatives Run 3 (adjust K via DART corporate actions) ✓ (2026-03-15) — flag rate 49.3% → 34.0%, extreme moneyness -87%
-- [ ] kr-derivatives Run 4 (resolve 32 remaining >10x moneyness outliers across 10 companies)
+- [x] kr-derivatives Run 4 (resolve 32 remaining >10x moneyness outliers) ✓ (2026-03-16) — moneyness >10x: 32→4 (only GENUINE_ITM remain), flag rate 34.0%→33.1%
 - [ ] kr-beneish PyPI publication
 
 ### P2 — May 2026
@@ -64,6 +64,7 @@ See `cross-issues/` for details. Summary:
 | kr-derivatives Run 2 plan | `../kr-derivatives/reports/second_run_prep.md` |
 | kr-derivatives Run 3 lessons | `../kr-derivatives/reports/third_run_lessons.md` |
 | kr-derivatives Run 4 plan | `../kr-derivatives/reports/fourth_run_prep.md` |
+| kr-derivatives Run 4 lessons | `../kr-derivatives/reports/fourth_run_lessons.md` |
 | Beneish calibration | `../kr-beneish/docs/calibration.md` |
 | Detectlet registry | `../jfia-forensic/data/curated/detectlets/` |
 | Company crosswalk data | `../kr-company-registry/data/dist/kr_corp_ids.parquet` |
