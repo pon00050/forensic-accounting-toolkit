@@ -4,6 +4,34 @@ Audit trail for ecosystem-wide changes coordinated from this hub.
 
 ---
 
+## 2026-03-16 — Known Gaps Integration + 4-Repo Sweep
+
+**Hub infrastructure:**
+- Integrated Known Gaps into ecosystem tooling: `parse_known_gaps()` in ecosystem.conf, Source 13 in triage-scan.sh, convention #13, and wired into /triage, /board, /work, /done, /plan skills
+
+**kr-derivatives** (79→118 tests):
+- Added 22 tests for `greeks.py` (delta, gamma, vega, theta, rho)
+- Added 9 tests for `composite_score()` severity tiers
+- Added 8 tests for `WarrantSpec` contract
+- Deleted dead constant `COL_CLOSE_UNADJ`
+
+**kr-company-registry:**
+- Extracted `_paths.py` from hardcoded paths in `build_crosswalk.py`
+- Resolved 2 Known Gaps (paths + test command)
+
+**jfia-forensic** (76→83 tests):
+- Removed unused `pandas>=2` runtime dep and `pytest-asyncio` dev dep
+- Added `by_fss_violation_category()` to `DetectletRegistry` (3 tests)
+- Added 4 tests for `JFIACatalog.by_keyword()`
+- Resolved 4 Known Gaps
+
+**kr-forensic-finance:**
+- Fixed 4 stale skip guards in `test_pipeline_invariants.py` (false negatives — `extract_cb_bw.py` exists)
+
+Known Gaps: 19→10 Unblocked across ecosystem
+
+---
+
 ## 2026-03-16 — kr-derivatives Run 4: Resolve >10x Moneyness Outliers
 
 - Investigated 10 outlier companies (32 rows with moneyness >10x) using DART `stockTotqySttus.json`, `crDecsn.json`, and `irdsSttus.json` (277 API calls)

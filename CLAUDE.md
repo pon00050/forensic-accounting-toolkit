@@ -21,8 +21,8 @@ Seven projects, one platform. Each is an independent git repo with its own CLAUD
 
 | Project | Path | Purpose | Tests |
 |---------|------|---------|-------|
-| **kr-derivatives** | `../kr-derivatives` | CB/BW option pricing + ITM issuance detection | 79 |
-| **jfia-forensic** | `../jfia-forensic` | Detectlet schema, JFIA enrichment pipeline, signal vocabulary | 76 |
+| **kr-derivatives** | `../kr-derivatives` | CB/BW option pricing + ITM issuance detection | 118 |
+| **jfia-forensic** | `../jfia-forensic` | Detectlet schema, JFIA enrichment pipeline, signal vocabulary | 83 |
 
 ### Platform (consumes all of the above)
 
