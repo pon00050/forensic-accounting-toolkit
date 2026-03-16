@@ -4,6 +4,25 @@ Audit trail for ecosystem-wide changes coordinated from this hub.
 
 ---
 
+## 2026-03-16 — XB-002 SEIBRO API: DEFERRED until end of April 2026
+
+Called 공공데이터 문의 (1566-0025). KSD (the providing agency) is not cooperating with data.go.kr
+to activate dataset 15001145 (StockSvc). A revised dataset/API is planned for launch by end of
+April 2026. Both StockSvc endpoints confirmed still returning `resultCode=99`; FSC bond API
+(same key) works fine — key is valid, problem is dataset-specific.
+
+**Updated across ecosystem:**
+- `cross-issues/XB-002-seibro-api-blocked.md` — status → DEFERRED, full timeline added
+- `ECOSYSTEM.md` — blocker status and P2 backlog updated
+- `kr-forensic-finance/KNOWN_ISSUES.md` — KI-012 remaining blocker section updated
+- `kr-forensic-finance/.claude/CLAUDE.md` — SEIBRO data source row updated
+- `kr-derivatives/CLAUDE.md` — Known Gaps and Phase 2 prerequisites updated
+- `kr-derivatives/src/kr_derivatives/forensic/repricing.py` — module docstring updated
+
+No code changes needed — `extract_seibro_repricing.py` already gracefully skips when API returns error.
+
+---
+
 ## 2026-03-16 — Known Gaps Integration + 4-Repo Sweep
 
 **Hub infrastructure:**

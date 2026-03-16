@@ -26,7 +26,7 @@ See `cross-issues/` for details. Summary:
 | ID | Title | Source | Fix Location | Status |
 |----|-------|--------|-------------|--------|
 | XB-001 | Split-adjusted prices needed | kr-derivatives Run 1 | kr-forensic-finance `extract_price_volume.py` | **FIXED** (2026-03-15, `9b99bfb`) |
-| XB-002 | SEIBRO API resultCode=99 | kr-forensic-finance | External (KSD approval) | **ACTIVE** (non-critical) |
+| XB-002 | SEIBRO API resultCode=99 | kr-forensic-finance | External (공공데이터포털 revising API) | **DEFERRED** until end of April 2026 |
 
 ---
 
@@ -46,7 +46,7 @@ See `cross-issues/` for details. Summary:
 
 ### P2 — May 2026
 - [ ] Phase 3 DART reassessment (sub-document parsers: extract or keep?)
-- [ ] SEIBRO API approval (call KSD 051-519-1420)
+- [ ] SEIBRO API activation (DEFERRED — 공공데이터포털 revising dataset/API, ETA end of April 2026)
 - [ ] kr-enforcement-cases dataset
 
 ### P3 — June–July 2026
