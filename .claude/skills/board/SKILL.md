@@ -28,6 +28,9 @@ Run `bash "C:/Users/pon00/Projects/forensic-accounting-toolkit/triage-scan.sh" q
 - Any `[UNCOMMITTED]` or `[UNPUSHED]` repos from GIT HYGIENE
 - Any data sync issues (if visible in quick mode)
 
+**Source D — Known Gaps (Unblocked):**
+Read each repo's CLAUDE.md and extract `## Known Gaps` table rows with Unblocked status. These are documented gaps that may represent work not yet on the board.
+
 ### 2. Merge and deduplicate
 
 Combine board Todo items and backlog items into a single list. Deduplicate by matching titles (board title "kr-beneish PyPI publication" matches backlog "kr-beneish PyPI publication"). When both exist, keep the richer description. Note items that appear in backlog but NOT on the board — these are "unsurfaced" and should be flagged.
@@ -52,6 +55,12 @@ Todo — Human:
 Unsurfaced (in backlog, not on board):
   [P2] kr-enforcement-cases dataset
   ...
+
+Known Gaps (Unblocked, not on board):
+  kr-derivatives — greeks.py zero test coverage
+  kr-beneish — edge case handling for missing quarters
+  ...
+  (capped at 5, sorted: bug > risk > other)
 
 Done: N items
 ```
@@ -118,16 +127,18 @@ Execution Order:
 ```
 
 **Wave assignment rules:**
+- Known Gaps with "bug" or "risk" in their status promote to Wave 1 if the repo has no other Wave 1 work
 - P3 items and items with target dates >6 weeks out go to "Deferred" regardless of dependencies
 - If a Human task blocks an AI task, flag it: `⚠️ blocks: [AI task title]`
 - If two Wave 1 items are in the same repo, they can't truly run in parallel — note this
 
 ### 6. Recommend next action
 
+After showing the execution order, recommend a session bundle: Wave 0 prerequisites first, then up to 3 AI-owned Wave 1 items from different repos. If a producer repo task (per DATAFLOW_* in ecosystem.conf) and a consumer repo task are both in the bundle, note that the producer must finish first with a `copy-parquets` sync in between. Flag any Human tasks that block AI work.
+
 End with:
 ```
-Recommended: /work [title of highest-priority Wave 1 AI task]
-  (or address Wave 0 prerequisites first if any exist)
+Recommended: /work [highest-priority Wave 1 AI task]
 ```
 
 ## Rules

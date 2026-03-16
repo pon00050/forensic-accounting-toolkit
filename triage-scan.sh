@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# triage-scan.sh — Collect task signals from 10 sources across the ecosystem
+# triage-scan.sh — Collect task signals from 13 sources across the ecosystem
 #
 # Usage:
 #   bash triage-scan.sh           Full scan (all 10 sources, ~8s)
@@ -379,5 +379,119 @@ if [ -d "$PIPELINE_SRC" ]; then
     done
 fi
 
+# ─────────────────────────────────────────────
+# SOURCE 11: Implementation completeness
+# ─────────────────────────────────────────────
+echo "--- IMPLEMENTATION COMPLETENESS ---"
+for repo in "${ALL_REPOS[@]}"; do
+    dir="$BASE/$repo"
+    [ -d "$dir" ] || continue
+
+    stubs=$(find "$dir" -type f -name '*.py' \
+        ! -path '*/.venv/*' ! -path '*/__pycache__/*' \
+        ! -path '*/.eggs/*' ! -path '*/build/*' ! -path '*/.git/*' \
+        -exec grep -Hn 'raise NotImplementedError\|pass  # TODO\|\.\.\.  # TODO' {} \; 2>/dev/null)
+
+    if [ -n "$stubs" ]; then
+        total=$(echo "$stubs" | wc -l | tr -d ' ')
+        blocked=$(echo "$stubs" | grep -ic 'API\|approval\|registration\|SEIBRO\|KSD\|blocked\|waiting' || true)
+        open=$((total - blocked))
+        echo "  $repo: $total stubs ($open OPEN, $blocked BLOCKED)"
+        echo "$stubs" | head -5 | while read -r line; do
+            echo "    ${line#$BASE/}"
+        done
+    fi
+done
 echo ""
+
+# ─────────────────────────────────────────────
+# SOURCE 12: Strategy alignment
+# ─────────────────────────────────────────────
+echo "--- STRATEGY ALIGNMENT ---"
+if [ -d "${STRATEGY_DIR:-}" ]; then
+    mentions=$(grep -rhoE 'kr-[a-z-]+|extract_[a-z_]+' "$STRATEGY_DIR" 2>/dev/null | sort -u)
+    for mention in $mentions; do
+        case "$mention" in
+            kr-*)
+                if [ ! -d "$BASE/$mention" ]; then
+                    echo "  [UNTRACKED] Strategy mentions repo '$mention' — does not exist"
+                fi ;;
+            extract_*)
+                if [ ! -f "$BASE/kr-forensic-finance/02_Pipeline/${mention}.py" ]; then
+                    echo "  [UNTRACKED] Strategy mentions extractor '$mention' — not implemented"
+                fi ;;
+        esac
+    done
+else
+    echo "  [SKIP] Strategy directory not found"
+fi
+echo ""
+
+# ─────────────────────────────────────────────
+# SOURCE 13: Known Gaps
+# ─────────────────────────────────────────────
+echo "--- KNOWN GAPS ---"
+gaps_output=$(parse_known_gaps)
+if [ -n "$gaps_output" ]; then
+    # Per-repo summary
+    declare -A gap_unblocked=() gap_blocked=() gap_deferred=() gap_bydesign=() gap_other=()
+    while IFS=$'\t' read -r repo status desc; do
+        status_lower=$(echo "$status" | tr '[:upper:]' '[:lower:]')
+        case "$status_lower" in
+            unblocked*)   gap_unblocked[$repo]=$(( ${gap_unblocked[$repo]:-0} + 1 )) ;;
+            blocked*)     gap_blocked[$repo]=$(( ${gap_blocked[$repo]:-0} + 1 )) ;;
+            deferred*)    gap_deferred[$repo]=$(( ${gap_deferred[$repo]:-0} + 1 )) ;;
+            *by*design*)  gap_bydesign[$repo]=$(( ${gap_bydesign[$repo]:-0} + 1 )) ;;
+            *)            gap_other[$repo]=$(( ${gap_other[$repo]:-0} + 1 )) ;;
+        esac
+    done <<< "$gaps_output"
+
+    # Collect all repos that have gaps
+    declare -A all_gap_repos=()
+    for repo in "${!gap_unblocked[@]}" "${!gap_blocked[@]}" "${!gap_deferred[@]}" "${!gap_bydesign[@]}" "${!gap_other[@]}"; do
+        all_gap_repos[$repo]=1
+    done
+
+    for repo in $(echo "${!all_gap_repos[@]}" | tr ' ' '\n' | sort); do
+        u=${gap_unblocked[$repo]:-0}
+        b=${gap_blocked[$repo]:-0}
+        d=${gap_deferred[$repo]:-0}
+        bd=${gap_bydesign[$repo]:-0}
+        parts=""
+        [ "$u" -gt 0 ] && parts="${parts}${u} Unblocked, "
+        [ "$b" -gt 0 ] && parts="${parts}${b} Blocked, "
+        [ "$d" -gt 0 ] && parts="${parts}${d} Deferred, "
+        [ "$bd" -gt 0 ] && parts="${parts}${bd} By design, "
+        parts=${parts%, }
+        echo "  $repo: $parts"
+    done
+
+    # List unblocked gaps in detail (these are actionable)
+    echo ""
+    echo "  Unblocked gaps (actionable):"
+    has_unblocked=0
+    while IFS=$'\t' read -r repo status desc; do
+        status_lower=$(echo "$status" | tr '[:upper:]' '[:lower:]')
+        if [[ "$status_lower" == unblocked* ]]; then
+            echo "    $repo — $desc"
+            has_unblocked=1
+        fi
+    done <<< "$gaps_output"
+    if [ "$has_unblocked" -eq 0 ]; then
+        echo "    (none)"
+    fi
+
+    # Ecosystem totals
+    total_u=0; total_b=0; total_d=0; total_bd=0
+    for v in "${gap_unblocked[@]}"; do total_u=$((total_u + v)); done
+    for v in "${gap_blocked[@]}"; do total_b=$((total_b + v)); done
+    for v in "${gap_deferred[@]}"; do total_d=$((total_d + v)); done
+    for v in "${gap_bydesign[@]}"; do total_bd=$((total_bd + v)); done
+    echo ""
+    echo "  Total: $total_u Unblocked, $total_b Blocked, $total_d Deferred, $total_bd By design"
+else
+    echo "  No Known Gaps sections found"
+fi
+echo ""
+
 echo "--- END (full scan) ---"

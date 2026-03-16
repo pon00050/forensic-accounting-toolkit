@@ -21,6 +21,8 @@ The argument `$ARGUMENTS` is the repo name (e.g., `kr-beneish`, `kr-derivatives`
 
 3. **Read CLAUDE.md** in the repo root to load project context.
 
+3b. **Show Known Gaps.** Extract the `## Known Gaps` table from CLAUDE.md (if present) and display it. Highlight any Unblocked items that relate to the current task or repo area.
+
 4. **Show git status**: `git status --short` — any uncommitted changes.
 
 5. **Show recent commits**: `git log --oneline -5` — what happened last.

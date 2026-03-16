@@ -49,6 +49,8 @@ Flag:
 - Uncommitted changes
 - Unpushed commits
 - Stale repos (no commits in 14+ days)
+- Known Gaps with "bug" or "risk" in status suffix (code quality signal)
+- Repos missing a `## Known Gaps` section in CLAUDE.md (convention drift)
 
 **Layer 3 — Convention Drift** (parallel with 1 and 2, via background agent)
 

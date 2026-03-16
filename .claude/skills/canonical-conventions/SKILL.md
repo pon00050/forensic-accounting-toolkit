@@ -24,6 +24,7 @@ This is the authoritative convention table for the Korean forensic accounting ec
 | 10 | .claude/ directory | Present at repo root | `test -d .claude` | jfia-catalog (minimal repo) |
 | 11 | compile-bytecode | `compile-bytecode = false` in `[tool.uv]` | `grep compile-bytecode pyproject.toml` | Repos without pyproject.toml |
 | 12 | CLAUDE.md present | Present at repo root | `test -f CLAUDE.md` | — |
+| 13 | Known Gaps section | `## Known Gaps` table in CLAUDE.md | `grep '## Known Gaps' CLAUDE.md` | Hub exempt (coordinator, not code) |
 
 ## Severity Levels
 

@@ -85,6 +85,7 @@ Wrap up a completed board task with full bookkeeping. The argument `$ARGUMENTS` 
    | Unblocked items | Did this unblock board items or backlog items? | Check board Todo and ECOSYSTEM.md backlog for items that reference the completed task or its repo. If unblocked: `[UNBLOCKED]` |
    | New TODOs | Did the committed code introduce new TODOs? | `git diff HEAD~1 HEAD` in the repo, grep for TODO/FIXME/HACK. If new: `[NEW TODO]` |
    | Cross-issue cascade | Did resolving a cross-issue unblock other work? | Check `cross-issues/` for items that reference the resolved issue. If unblocked: `[CROSS-ISSUE]` |
+   | Known Gaps resolved | Did completed work resolve a Known Gap? | Compare files touched and tests added against the target repo's `## Known Gaps` table in CLAUDE.md. If a gap appears resolved: `[KNOWN GAP RESOLVED]` — suggest removing or updating the row |
 
    Output format (appended to the report):
 
