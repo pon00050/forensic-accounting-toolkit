@@ -36,10 +36,16 @@ Wrap up a completed board task with full bookkeeping. The argument `$ARGUMENTS` 
    - If yes, update it. If no, skip.
 
 5b. **Sync hub CLAUDE.md counts.** After updating ECOSYSTEM.md, verify test counts and extractor counts are current:
-   - Run `uv run pytest tests/ --co -q` in the completed repo (or `python -m pytest tests/ --co -q` for kr-forensic-finance). Parse the test count from the last line.
+   - Run `uv run pytest tests/ --co -q` in the completed repo. Parse the test count from the last line.
    - Compare to the count shown in hub `CLAUDE.md` ecosystem table. If different, update the number.
-   - If the repo is kr-forensic-finance, also count `.py` files matching `02_Pipeline/extract_*.py`. If the count differs from CLAUDE.md's "N extractors" claim, update it.
-   - Only touch CLAUDE.md if a number actually changed.
+   - Also check ECOSYSTEM.md publication table for the same repo's test count — update it to match if different.
+   - If the repo is krff-shell (delivery shell), also count `.py` files matching `kr-dart-pipeline/kr_dart_pipeline/extract_*.py`. If the count differs from CLAUDE.md's "N extractors" claim, update it.
+   - Only touch CLAUDE.md and ECOSYSTEM.md if a number actually changed.
+   - **Stale name check**: After any file edit in this session, run:
+     ```bash
+     grep -rl "kr-forensic-finance" /c/Users/pon00/Projects/*/CLAUDE.md /c/Users/pon00/Projects/*/README.md /c/Users/pon00/Projects/forensic-accounting-toolkit/*.md /c/Users/pon00/Projects/forensic-accounting-toolkit/*.conf 2>/dev/null | grep -v ".git" | grep -v "reports/"
+     ```
+     If any files are returned, replace `kr-forensic-finance` with `krff-shell` in those files (excluding historical reports/ directories).
 
 5c. **Sync cross-issue files.** If the completed task resolves a cross-issue:
    - Update `cross-issues/XB-NNN.md` status from ACTIVE to RESOLVED with date and commit hash

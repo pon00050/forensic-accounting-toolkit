@@ -215,7 +215,7 @@ for pq in "${PARQUET_FILES[@]}"; do
     dst_file="$PIPELINE_DST/$pq"
 
     if [ ! -f "$src_file" ]; then
-        echo "  [MISSING] $pq — not in kr-forensic-finance output"
+        echo "  [MISSING] $pq — not in krff-shell output"
         continue
     fi
     if [ ! -f "$dst_file" ]; then
@@ -288,6 +288,31 @@ for repo in "${ALL_REPOS[@]}"; do
 done
 if [ "$conv_drift" -eq 0 ]; then
     echo "  [OK] All repos pass quick convention check"
+fi
+echo ""
+
+# ─────────────────────────────────────────────
+# SOURCE 8b: Doc drift — stale repo-name references
+# ─────────────────────────────────────────────
+echo "--- DOC DRIFT ---"
+stale_doc_files=$(grep -rl "kr-forensic-finance" \
+    "$BASE"/*/CLAUDE.md \
+    "$BASE"/*/README.md \
+    "$HUB"/*.conf \
+    "$HUB"/ARCHITECTURE.md \
+    "$HUB"/ECOSYSTEM.md \
+    "$HUB"/WORKFLOW.md \
+    "$HUB"/lessons.md \
+    2>/dev/null | grep -v "\.git" | grep -v "reports/" | grep -v ".venv" || true)
+if [ -n "$stale_doc_files" ]; then
+    stale_count=$(echo "$stale_doc_files" | wc -l | tr -d ' ')
+    echo "  [STALE] $stale_count file(s) contain stale 'kr-forensic-finance' reference:"
+    echo "$stale_doc_files" | while read -r f; do
+        echo "    ${f#$BASE/}"
+    done
+    echo "  Fix: replace 'kr-forensic-finance' → 'krff-shell' in each file"
+else
+    echo "  [OK] No stale repo-name references found"
 fi
 echo ""
 
@@ -370,11 +395,11 @@ for repo in "${ALL_REPOS[@]}"; do
     fi
 done
 
-# Check: kr-forensic-finance has its pipeline outputs (uses shared PARQUET_FILES)
+# Check: krff-shell has its pipeline outputs (uses shared PARQUET_FILES)
 if [ -d "$PIPELINE_SRC" ]; then
     for pq in "${PARQUET_FILES[@]}"; do
         if [ ! -f "$PIPELINE_SRC/$pq" ]; then
-            echo "  [WARN] kr-forensic-finance missing $pq in processed output"
+            echo "  [WARN] krff-shell missing $pq in processed output"
         fi
     done
 fi
@@ -417,7 +442,7 @@ if [ -d "${STRATEGY_DIR:-}" ]; then
                     echo "  [UNTRACKED] Strategy mentions repo '$mention' — does not exist"
                 fi ;;
             extract_*)
-                if [ ! -f "$BASE/kr-forensic-finance/02_Pipeline/${mention}.py" ]; then
+                if [ ! -f "$BASE/kr-dart-pipeline/kr_dart_pipeline/${mention}.py" ]; then
                     echo "  [UNTRACKED] Strategy mentions extractor '$mention' — not implemented"
                 fi ;;
         esac

@@ -37,7 +37,7 @@ Check for:
 
 **Layer 2 — Repo Health** (parallel with 1 and 3)
 
-For each repo in `C:\Users\pon00\Projects\` (kr-forensic-finance, kr-company-registry, kr-beneish, kr-derivatives, kr-trading-calendar, jfia-catalog, jfia-forensic, kr-real-estate):
+For each repo in `C:\Users\pon00\Projects\` (krff-shell, kr-forensic-core, kr-dart-pipeline, kr-anomaly-scoring, kr-stat-tests, kr-company-registry, kr-trading-calendar, kr-beneish, kr-derivatives, jfia-catalog, jfia-forensic, kr-enforcement-cases, kr-real-estate):
 
 ```bash
 git -C ../REPO status --porcelain

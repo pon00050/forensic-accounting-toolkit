@@ -25,6 +25,7 @@ This is the authoritative convention table for the Korean forensic accounting ec
 | 11 | compile-bytecode | `compile-bytecode = false` in `[tool.uv]` | `grep compile-bytecode pyproject.toml` | Repos without pyproject.toml |
 | 12 | CLAUDE.md present | Present at repo root | `test -f CLAUDE.md` | — |
 | 13 | Known Gaps section | `## Known Gaps` table in CLAUDE.md | `grep '## Known Gaps' CLAUDE.md` | Hub exempt (coordinator, not code) |
+| 14 | No stale repo-name references | Zero matches for `kr-forensic-finance` in `.md`, `.toml`, `.conf` files | `grep -rl "kr-forensic-finance" --include="*.md" --include="*.toml" --include="*.conf"` | Files under `reports/` (historical session logs) |
 
 ## Severity Levels
 
@@ -37,11 +38,16 @@ This is the authoritative convention table for the Korean forensic accounting ec
 
 All repos under `C:\Users\pon00\Projects\`:
 
-1. `kr-forensic-finance`
-2. `kr-company-registry`
-3. `kr-beneish`
-4. `kr-derivatives`
-5. `kr-trading-calendar`
-6. `jfia-catalog`
-7. `jfia-forensic`
-8. `kr-real-estate`
+1. `krff-shell` (delivery shell — renamed from kr-forensic-finance)
+2. `kr-forensic-core`
+3. `kr-dart-pipeline`
+4. `kr-anomaly-scoring`
+5. `kr-stat-tests`
+6. `kr-company-registry`
+7. `kr-trading-calendar`
+8. `kr-beneish`
+9. `kr-derivatives`
+10. `jfia-catalog`
+11. `jfia-forensic`
+12. `kr-enforcement-cases`
+13. `kr-real-estate`

@@ -53,7 +53,7 @@ Todo — Human:
   ...
 
 Unsurfaced (in backlog, not on board):
-  [P2] kr-enforcement-cases dataset
+  [P2] kr-enforcement-cases → kr-forensic-finance label integration
   ...
 
 Known Gaps (Unblocked, not on board):
@@ -111,8 +111,8 @@ Execution Order:
     [P1] [AI] kr-derivatives Run 4
 
   Wave 2 (after Wave 1):
-    [P2] [AI] kr-enforcement-cases dataset
-      ↳ waits on: kr-derivatives Run 4 (needs validated screen methodology)
+    [P2] [AI] kr-enforcement-cases → kr-forensic-finance label integration
+      ↳ waits on: kr-enforcement-cases GitHub publication (done) + label pipeline wiring
 
   Deferred (P3 / future month):
     [P3] [AI] Platform integration (Phase 4)

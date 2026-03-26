@@ -99,8 +99,8 @@ Scan the entire ecosystem for actionable work and produce a prioritized task lis
    Gaps discovered:
      5. [OPEN STUB]   kr-derivatives — repricing engine has NotImplementedError
                       Why: core functionality, blocked only by SEIBRO data
-     6. [STRATEGY]    kr-enforcement-cases — mentioned in strategy docs, repo does not exist
-                      Why: needed for Phase 4 platform integration
+     6. [INTEGRATION] kr-enforcement-cases — enforcement labels not yet consumed by kr-forensic-finance
+                      Why: violations.csv exists but label pipeline not wired
 
    Blocked (informational):
      - kr-derivatives — SVI fitting: requires KRX options data (Phase 2)
