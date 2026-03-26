@@ -10,16 +10,11 @@ import sys
 
 try:
     data = json.load(sys.stdin)
-    tool_input = data.get("tool_input", {})
-    fp = tool_input.get("file_path", "")
+    fp = data.get("tool_input", {}).get("file_path", "")
 except (json.JSONDecodeError, AttributeError):
     sys.exit(0)
 
 if not fp:
-    sys.exit(0)
-
-# Only check documentation files — skip parquets, binaries, etc.
-if not any(fp.endswith(ext) for ext in (".md", ".toml", ".conf", ".py", ".sh", ".txt", ".yaml", ".yml", ".json")):
     sys.exit(0)
 
 try:
@@ -37,19 +32,18 @@ for i, line in enumerate(lines, 1):
         continue
     if "Previously known as" in line:
         continue
-    # Skip lines where it appears as a quoted code/grep pattern (meta-reference)
     if "`kr-forensic-finance`" in line or '"kr-forensic-finance"' in line:
         continue
     hits.append((i, line.strip()))
+    if len(hits) == 4:
+        break  # display cap reached; no need to scan further
 
 if not hits:
     sys.exit(0)
 
 print(f"[DOC DRIFT] Stale name 'kr-forensic-finance' in {fp}:")
-for lineno, text in hits[:4]:
+for lineno, text in hits:
     print(f"  line {lineno}: {text[:100]}")
-if len(hits) > 4:
-    print(f"  ... and {len(hits) - 4} more")
 print("  Replace with 'krff-shell' (delivery shell) or 'kr-dart-pipeline' (ETL) as appropriate.")
 
 sys.exit(0)

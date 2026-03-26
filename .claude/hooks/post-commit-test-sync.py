@@ -16,8 +16,6 @@ from pathlib import Path
 
 HUB = Path("C:/Users/pon00/Projects/forensic-accounting-toolkit")
 HUB_CLAUDE = HUB / "CLAUDE.md"
-HUB_ECOSYSTEM = HUB / "ECOSYSTEM.md"
-BASE = HUB.parent
 
 try:
     data = json.load(sys.stdin)
@@ -30,17 +28,13 @@ if "git commit" not in command:
     sys.exit(0)
 
 # Detect repo path from -C flag (e.g. git -C /path/to/repo commit ...)
-repo_path = None
 m = re.search(r"git -C ([^\s]+)", command)
-if m:
-    repo_path = Path(m.group(1).strip("'\""))
-else:
+if not m:
     # No -C flag — hook cwd is the hub, not the committed repo; skip
     sys.exit(0)
 
-# Resolve and validate
 try:
-    repo_path = repo_path.resolve()
+    repo_path = Path(m.group(1).strip("'\"")).resolve()
 except Exception:
     sys.exit(0)
 
@@ -50,17 +44,16 @@ repo_name = repo_path.name
 if not (repo_path / "tests").exists():
     sys.exit(0)
 
-# Run pytest collection count
+# Run pytest collection count (--co is fast: no test execution)
 try:
     result = subprocess.run(
         ["uv", "run", "pytest", "tests/", "--co", "-q", "--no-header"],
         cwd=repo_path,
         capture_output=True,
         text=True,
-        timeout=60,
+        timeout=30,
     )
-    output = result.stdout + result.stderr
-    m = re.search(r"(\d+) tests? collected", output)
+    m = re.search(r"(\d+) tests? collected", result.stdout + result.stderr)
     if not m:
         sys.exit(0)
     actual = int(m.group(1))
@@ -70,7 +63,6 @@ except Exception:
 # Read hub CLAUDE.md to find claimed count for this repo
 try:
     claude_text = HUB_CLAUDE.read_text(encoding="utf-8")
-    # Match table rows: | **repo-name** | path | description | N |
     pattern = rf"\|\s*\*\*{re.escape(repo_name)}\*\*\s*\|[^|]+\|[^|]+\|\s*(\d+)\s*\|"
     m = re.search(pattern, claude_text)
     if not m:

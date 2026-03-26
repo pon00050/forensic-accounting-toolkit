@@ -5,30 +5,21 @@
 # historical rename notes in "Previously known as" lines).
 # Output is printed once so the user sees it before the session closes.
 
-BASE="/c/Users/pon00/Projects"
-HUB="$BASE/forensic-accounting-toolkit"
+# Source shared config for BASE, HUB, and ALL_REPOS (single source of truth)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../../../ecosystem.conf" 2>/dev/null || {
+    # Fallback if sourcing fails
+    BASE="/c/Users/pon00/Projects"
+    HUB="$BASE/forensic-accounting-toolkit"
+    ALL_REPOS=(forensic-accounting-toolkit kr-company-registry kr-trading-calendar
+        kr-beneish kr-derivatives jfia-catalog jfia-forensic kr-enforcement-cases
+        kr-forensic-core krff-shell kr-dart-pipeline kr-anomaly-scoring kr-stat-tests
+        kr-real-estate)
+}
 
-stale_files=()
-while IFS= read -r f; do
-    # For each file containing kr-forensic-finance, check if any
-    # occurrence is NOT in a "Previously known as" line
-    # Count lines that have stale name but are NOT historical/meta references
-    real_stale=$(grep "kr-forensic-finance" "$f" 2>/dev/null \
-        | grep -v "Previously known as" \
-        | grep -v '`kr-forensic-finance`' \
-        | grep -v '"kr-forensic-finance"' \
-        | wc -l | tr -d ' ')
-    if [ "$real_stale" -gt 0 ]; then
-        stale_files+=("${f#$BASE/}")
-    fi
-# Scope to ecosystem repos only (from ecosystem.conf ALL_REPOS)
-ECOSYSTEM_REPOS=(
-    forensic-accounting-toolkit kr-company-registry kr-trading-calendar kr-beneish
-    kr-derivatives jfia-catalog jfia-forensic kr-enforcement-cases kr-forensic-core
-    krff-shell kr-dart-pipeline kr-anomaly-scoring kr-stat-tests kr-real-estate
-)
+# Build scan targets from ALL_REPOS (declared before the while loop)
 SCAN_TARGETS=()
-for r in "${ECOSYSTEM_REPOS[@]}"; do
+for r in "${ALL_REPOS[@]}"; do
     [ -f "$BASE/$r/CLAUDE.md" ] && SCAN_TARGETS+=("$BASE/$r/CLAUDE.md")
     [ -f "$BASE/$r/README.md" ] && SCAN_TARGETS+=("$BASE/$r/README.md")
 done
@@ -37,6 +28,14 @@ SCAN_TARGETS+=(
     "$HUB/WORKFLOW.md" "$HUB/lessons.md" "$HUB"/*.conf
 )
 
+stale_files=()
+while IFS= read -r f; do
+    # Count lines that have stale name but are NOT historical/meta references
+    real_stale=$(grep "kr-forensic-finance" "$f" 2>/dev/null \
+        | grep -vc "Previously known as\|^\`kr-forensic-finance\`\|\"kr-forensic-finance\"")
+    if [ "$real_stale" -gt 0 ]; then
+        stale_files+=("${f#$BASE/}")
+    fi
 done < <(grep -rl "kr-forensic-finance" "${SCAN_TARGETS[@]}" \
     2>/dev/null | grep -v "\.git" | grep -v "reports/" | grep -v ".venv")
 
