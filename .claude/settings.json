@@ -7,6 +7,10 @@
           {
             "type": "command",
             "command": "bash C:/Users/pon00/Projects/forensic-accounting-toolkit/.claude/hooks/session-start.sh"
+          },
+          {
+            "type": "command",
+            "command": "python -c \"import os, glob, time; files=glob.glob('../kr-forensic-finance/01_Data/processed/*.parquet'); stale=[(os.path.basename(f), int((time.time()-os.path.getmtime(f))/86400)) for f in files if time.time()-os.path.getmtime(f)>14*86400]; [print(f'STALE PARQUET: {n} ({d}d old) — consider uv run krff run') for n,d in stale]; print('All parquets fresh.') if not stale and files else None\" 2>/dev/null || true"
           }
         ]
       }
@@ -39,6 +43,10 @@
           {
             "type": "command",
             "command": "bash -c 'echo \"--- SESSION END CHECK ---\" && cd /c/Users/pon00/Projects/forensic-accounting-toolkit && bash ecosystem.sh status 2>/dev/null | grep -v CLEAN | head -10 && echo \"---\"'"
+          },
+          {
+            "type": "prompt",
+            "prompt": "Before finishing, verify: (1) Did you run tests for every repo you changed? If not, state which ones are untested. (2) Are there uncommitted changes in repos you modified? (3) Did you update ECOSYSTEM.md if publication or blocker status changed? Respond with {\"ok\": true} if all clear, or {\"ok\": false, \"reason\": \"<what still needs doing>\"} if not — and then do those remaining things."
           }
         ]
       }
