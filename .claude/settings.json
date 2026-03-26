@@ -43,10 +43,6 @@
           {
             "type": "command",
             "command": "bash -c 'echo \"--- SESSION END CHECK ---\" && cd /c/Users/pon00/Projects/forensic-accounting-toolkit && bash ecosystem.sh status 2>/dev/null | grep -v CLEAN | head -10 && echo \"---\"'"
-          },
-          {
-            "type": "prompt",
-            "prompt": "Before finishing, verify: (1) Did you run tests for every repo you changed? If not, state which ones are untested. (2) Are there uncommitted changes in repos you modified? (3) Did you update ECOSYSTEM.md if publication or blocker status changed? Respond with {\"ok\": true} if all clear, or {\"ok\": false, \"reason\": \"<what still needs doing>\"} if not — and then do those remaining things."
           }
         ]
       }

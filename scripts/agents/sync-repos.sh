@@ -14,21 +14,22 @@ set -euo pipefail
 
 HUB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-exec claude -p "You are a cross-repo sync agent for the Korean forensic finance ecosystem.
+cd "$HUB_DIR"
+exec claude --dangerously-skip-permissions -p "You are a cross-repo sync agent for the Korean forensic finance ecosystem.
 
-Working directory: $HUB_DIR
+Current directory: $HUB_DIR
 
 Steps:
-1. Read $HUB_DIR/ecosystem.conf to understand PIPELINE_SRC, PIPELINE_DST, and PARQUET_FILES
+1. Read ecosystem.conf to understand PIPELINE_SRC, PIPELINE_DST, and PARQUET_FILES
 2. For each file in PARQUET_FILES, check:
    a. Source exists: PIPELINE_SRC/<file>
    b. Destination exists: PIPELINE_DST/<file>
    c. Whether source is newer than destination (needs copy)
-3. Run sync if needed: bash $HUB_DIR/ecosystem.sh copy-parquets
+3. Run sync if needed: bash ecosystem.sh copy-parquets
 4. Verify the copy: compare row counts of source vs destination for each parquet
    - python -c \"import pandas as pd; s=pd.read_parquet('<src>'); d=pd.read_parquet('<dst>'); print('rows match' if len(s)==len(d) else f'MISMATCH: src={len(s)} dst={len(d)}')\"
 5. Check kr-enforcement-cases dart_matches.csv freshness:
-   - Read $HUB_DIR/../kr-enforcement-cases/data/curated/dart_matches.csv
+   - Read ../kr-enforcement-cases/data/curated/dart_matches.csv
    - Report row count and last modification date
 6. Report JSON summary:
    {
@@ -44,7 +45,4 @@ Rules:
 - Do NOT modify source code files
 - Do NOT push to git
 - Report mismatches but do NOT attempt to fix them (create a GitHub issue note instead)" \
-    --allowedTools "Bash(bash $HUB_DIR/ecosystem.sh *),Bash(python *),Bash(ls *),Read,Glob,Grep" \
-    --output-format json \
-    --max-turns 20 \
-    --cwd "$HUB_DIR"
+    --max-budget-usd 0.50
