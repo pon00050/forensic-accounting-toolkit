@@ -303,7 +303,12 @@ stale_doc_files=$(grep -rl "kr-forensic-finance" \
     "$HUB"/ECOSYSTEM.md \
     "$HUB"/WORKFLOW.md \
     "$HUB"/lessons.md \
-    2>/dev/null | grep -v "\.git" | grep -v "reports/" | grep -v ".venv" || true)
+    2>/dev/null | grep -v "\.git" | grep -v "reports/" | grep -v ".venv" \
+    | while read -r f; do
+        # Skip files where ALL occurrences are in "Previously known as" lines (historical rename notes)
+        non_historical=$(grep "kr-forensic-finance" "$f" 2>/dev/null | grep -v "Previously known as" | wc -l | tr -d ' ')
+        [ "$non_historical" -gt 0 ] && echo "$f"
+    done || true)
 if [ -n "$stale_doc_files" ]; then
     stale_count=$(echo "$stale_doc_files" | wc -l | tr -d ' ')
     echo "  [STALE] $stale_count file(s) contain stale 'kr-forensic-finance' reference:"
