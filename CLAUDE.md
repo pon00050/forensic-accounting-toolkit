@@ -167,6 +167,48 @@ Run `/plan conventions` to audit all repos against it. Summary:
 
 ---
 
+## Documentation Maintenance
+
+Documentation across 13 repos drifts in two ways: **stale repo names** (old name `kr-forensic-finance` appearing in new content) and **stale test counts** (hub CLAUDE.md table falling behind as tests are added). A layered set of automatic and semi-automatic mechanisms keeps both in check.
+
+### Design rule: where counts live
+
+Per-repo CLAUDE.md files **do not contain test counts** — they only describe purpose, architecture, and conventions (static info). Test counts live only in the hub CLAUDE.md ecosystem table and ECOSYSTEM.md publication table, maintained by automation.
+
+### Automatic hooks (no user action needed)
+
+All hooks live in `.claude/hooks/` and are wired in `.claude/settings.json`.
+
+| Hook | Event | What it does |
+|------|-------|-------------|
+| `post-edit-stale-check.py` | `PostToolUse/Edit` and `PostToolUse/Write` | After any file edit, greps the written content for `kr-forensic-finance`. Warns immediately with the line numbers. Fires silently when clean. |
+| `post-commit-test-sync.py` | `PostToolUse/Bash` (git commit only) | After `git -C <repo> commit`, runs `pytest --co -q` and compares the count to hub CLAUDE.md. Warns with exact numbers if they diverge. |
+| `stop-doc-drift-scan.sh` | `Stop` | Full sweep of all CLAUDE.md, README.md, and hub docs at session end. Reports any files still carrying stale names before the session closes. |
+| `session-start.sh` + triage DOC DRIFT | `SessionStart` | On session open, `triage-scan.sh` SOURCE 8b greps the same file set and surfaces stale names as the first signal of the session. |
+
+### Skill-based mechanisms (manual trigger, automatic execution)
+
+| Skill / step | Trigger | What it does |
+|---|---|---|
+| `/done` step 5b | After task completion | Runs `pytest --co -q`, syncs count to hub CLAUDE.md + ECOSYSTEM.md, then runs the stale-name grep across all docs. |
+| `/triage` SOURCE 8b | `DOC DRIFT` section | Surfaces all files with stale repo names; shows exact file paths. |
+| `/plan conventions` convention #14 | Convention audit | `grep -rl "kr-forensic-finance"` across all repos; listed as a named convention violation. |
+
+### Single sources of truth
+
+| What | Where | Updated by |
+|------|-------|-----------|
+| Repo list | `ecosystem.conf` `ALL_REPOS` | Hand-edit when a repo is added/removed |
+| Test counts | Hub `CLAUDE.md` ecosystem table | `post-commit-test-sync.py` warns; `/done` writes the fix |
+| Publication status | `ECOSYSTEM.md` | `/done` after any publication event |
+| Stale name exceptions | `post-edit-stale-check.py` and `stop-doc-drift-scan.sh` | "Previously known as" lines are explicitly excluded from warnings |
+
+### What is NOT automated (by design)
+
+The actual **write** step — updating hub CLAUDE.md and ECOSYSTEM.md with corrected counts — is not auto-applied. Hooks warn; humans (or `/done`) confirm and commit. This prevents silent auto-edits from writing wrong counts mid-session before tests are finalised.
+
+---
+
 ## When Working in This Directory
 
 You are in the coordination hub. Your job here is to:
