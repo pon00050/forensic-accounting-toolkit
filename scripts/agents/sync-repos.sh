@@ -2,7 +2,7 @@
 # scripts/agents/sync-repos.sh
 # Headless agent: syncs data artifacts between ecosystem repos.
 #
-# Specifically copies parquets from kr-forensic-finance output → kr-derivatives input,
+# Specifically copies parquets from kr-dart-pipeline/krff-shell output → kr-derivatives input,
 # verifies the copy, and reports any schema drift between source and destination.
 #
 # Usage:

@@ -6,7 +6,7 @@ This is **not a code project**. It is the orchestration layer for a multi-repo K
 
 ## The Ecosystem
 
-Seven projects, one platform. Each is an independent git repo with its own CLAUDE.md.
+Eight projects, one platform. Each is an independent git repo with its own CLAUDE.md.
 
 ### Foundation Libraries (standalone, no cross-imports)
 
@@ -23,12 +23,17 @@ Seven projects, one platform. Each is an independent git repo with its own CLAUD
 |---------|------|---------|-------|
 | **kr-derivatives** | `../kr-derivatives` | CB/BW option pricing + ITM issuance detection | 118 |
 | **jfia-forensic** | `../jfia-forensic` | Detectlet schema, JFIA enrichment pipeline, signal vocabulary | 83 |
+| **kr-enforcement-cases** | `../kr-enforcement-cases` | FSS/SFC enforcement case dataset + LLM enrichment pipeline | 65 |
 
 ### Platform (consumes all of the above)
 
 | Project | Path | Purpose | Tests |
 |---------|------|---------|-------|
-| **kr-forensic-finance** | `../kr-forensic-finance` | 15 extractors, 4 analysis phases, CLI, FastAPI, MCP server | 306 |
+| **kr-forensic-core** | `../kr-forensic-core` | Shared constants, schemas, path conventions (zero deps) | 10 |
+| **kr-dart-pipeline** | `../kr-dart-pipeline` | ETL: 15 extractors (DART/KRX/SEIBRO/KFTC/FSC) → parquet | — |
+| **kr-anomaly-scoring** | `../kr-anomaly-scoring` | CB/BW + timing + officer network anomaly scoring | — |
+| **kr-stat-tests** | `../kr-stat-tests` | 14 statistical validation tests (PCA, bootstrap, LASSO, RF…) | — |
+| **krff-shell** | `../kr-forensic-finance` (dir; pkg=krff-shell) | Delivery shell: CLI, reports, review queue, DuckDB query layer | 306 |
 
 ### Related (not core, potentially relevant)
 
@@ -41,16 +46,25 @@ Seven projects, one platform. Each is an independent git repo with its own CLAUD
 ## Dependency Graph
 
 ```
-jfia-catalog ──► jfia-forensic ──► kr-forensic-finance (MCP tool #11)
-                                          ▲
-kr-company-registry ──────────────────────┤ (corp_code ↔ ticker)
-kr-trading-calendar ──────────────────────┤ (trading-day math)
-kr-beneish ───────────────────────────────┤ (M-Score computation)
-kr-derivatives ───────────────────────────┘ (CB/BW scoring; reads parquets)
+kr-forensic-core  ← shared constants, schemas, path conventions (zero external deps)
+    ↑
+    ├── kr-dart-pipeline       (ETL: writes parquets)
+    ├── kr-anomaly-scoring     (reads parquets, uses thresholds)
+    ├── kr-stat-tests          (reads parquets + CSVs)
+    └── krff-shell             (delivery: CLI + reports + review queue)
+
+jfia-catalog ──► jfia-forensic ──► krff-shell (MCP tool #11)
+                                        ▲
+kr-company-registry ────────────────────┤ (corp_code ↔ ticker)
+kr-trading-calendar ────────────────────┤ (trading-day math)
+kr-beneish ─────────────────────────────┤ (M-Score computation)
+kr-derivatives ─────────────────────────┤ (CB/BW scoring; reads parquets from kr-dart-pipeline)
+kr-enforcement-cases ───────────────────┘ (enforcement labels; future MCP tool #12)
 ```
 
-Libraries are standalone. kr-forensic-finance is the integration point.
-kr-derivatives reads **data files** from kr-forensic-finance (not code imports).
+Data flow: kr-dart-pipeline writes parquets → kr-anomaly-scoring + kr-stat-tests + krff-shell read them.
+kr-derivatives reads parquet **data files** from kr-dart-pipeline outputs (not code imports).
+kr-enforcement-cases produces **enforcement labels** for supervised model training in krff-shell.
 
 ---
 

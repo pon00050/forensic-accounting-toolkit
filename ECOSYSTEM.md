@@ -1,6 +1,6 @@
 # Ecosystem Status
 
-> Last updated: 2026-03-16
+> Last updated: 2026-03-17
 
 ---
 
@@ -8,7 +8,11 @@
 
 | Repo | GitHub | PyPI | Status |
 |------|--------|------|--------|
-| kr-forensic-finance | pon00050/kr-forensic-finance | — | Published (102 commits, 2 stars) |
+| krff-shell (was kr-forensic-finance) | pon00050/krff-shell | — | Published (renamed 2026-03-26; local dir still kr-forensic-finance) |
+| kr-forensic-core | pon00050/kr-forensic-core | — | Created 2026-03-26. 10 tests. Shared foundation. |
+| kr-dart-pipeline | pon00050/kr-dart-pipeline | — | Pending creation |
+| kr-anomaly-scoring | pon00050/kr-anomaly-scoring | — | Pending creation |
+| kr-stat-tests | pon00050/kr-stat-tests | — | Pending creation |
 | kr-company-registry | pon00050/kr-company-registry | — | Published (v1.0.0, weekly auto-refresh) |
 | kr-health-monitor | pon00050/kr-health-monitor | — | Published (out of toolkit scope) |
 | kr-beneish | [pon00050/kr-beneish](https://github.com/pon00050/kr-beneish) | **Not published** | Published (2026-03-15). 61 tests. |
@@ -16,6 +20,7 @@
 | kr-trading-calendar | [pon00050/kr-trading-calendar](https://github.com/pon00050/kr-trading-calendar) | — | Published (2026-03-15). 10 tests. |
 | jfia-catalog | [pon00050/jfia-catalog](https://github.com/pon00050/jfia-catalog) | — | Published (2026-03-15). Data artifact. |
 | jfia-forensic | [pon00050/jfia-forensic](https://github.com/pon00050/jfia-forensic) | **Not published** | Published (2026-03-15). 76 tests. |
+| kr-enforcement-cases | [pon00050/kr-enforcement-cases](https://github.com/pon00050/kr-enforcement-cases) | — | Published (2026-03-17, v1.0.0). 65 tests. 240 enforcement cases (FSS+SFC). |
 
 ---
 
@@ -47,7 +52,7 @@ See `cross-issues/` for details. Summary:
 ### P2 — May 2026
 - [ ] Phase 3 DART reassessment (sub-document parsers: extract or keep?)
 - [ ] SEIBRO API activation (DEFERRED — 공공데이터포털 revising dataset/API, ETA end of April 2026)
-- [ ] kr-enforcement-cases dataset
+- [x] kr-enforcement-cases dataset ✓ (2026-03-17, v1.0.0 — 240 cases, 3 sources, 65 tests)
 
 ### P3 — June–July 2026
 - [ ] Platform integration (Phase 4)
@@ -69,4 +74,7 @@ See `cross-issues/` for details. Summary:
 | Detectlet registry | `../jfia-forensic/data/curated/detectlets/` |
 | Company crosswalk data | `../kr-company-registry/data/dist/kr_corp_ids.parquet` |
 | Labeled fraud cases (30) | `../kr-beneish/src/kr_beneish/data/labels.csv` |
+| Enforcement violations (240) | `../kr-enforcement-cases/reports/violations.csv` |
+| Enforcement Beneish ratios (60) | `../kr-enforcement-cases/reports/beneish_ratios.csv` |
+| DART-matched enforcement companies (86) | `../kr-enforcement-cases/data/curated/dart_matches.csv` |
 | JFIA enriched articles | `../jfia-forensic/data/curated/jfia_enriched.json` |
