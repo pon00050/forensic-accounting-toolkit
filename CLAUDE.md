@@ -163,7 +163,7 @@ Run `/plan conventions` to audit all repos against it. Summary:
 | Commit style | feat/fix/docs/refactor/test/chore prefix | — |
 | .claude/ directory | Present | jfia-catalog |
 | compile-bytecode | `false` in `[tool.uv]` | Repos without pyproject.toml |
-| CLAUDE.md | Present at repo root | kr-forensic-core, kr-dart-pipeline, kr-anomaly-scoring, kr-stat-tests (missing; to be added) |
+| CLAUDE.md | Present at repo root | — |
 
 ---
 
