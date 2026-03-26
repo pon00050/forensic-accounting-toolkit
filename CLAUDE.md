@@ -6,14 +6,14 @@ This is **not a code project**. It is the orchestration layer for a multi-repo K
 
 ## The Ecosystem
 
-Eight projects, one platform. Each is an independent git repo with its own CLAUDE.md.
+Thirteen repos across four layers. Each is an independent git repo.
 
 ### Foundation Libraries (standalone, no cross-imports)
 
 | Project | Path | Purpose | Tests |
 |---------|------|---------|-------|
-| **kr-company-registry** | `../kr-company-registry` | DART↔KRX↔BRN↔CRN identifier crosswalk (3,949 companies) | 18 |
-| **kr-trading-calendar** | `../kr-trading-calendar` | KRX trading-day math (holidays, offsets, ranges) | 10 |
+| **kr-company-registry** | `../kr-company-registry` | DART↔KRX↔BRN↔CRN identifier crosswalk (3,948 companies) | 18 |
+| **kr-trading-calendar** | `../kr-trading-calendar` | KRX trading-day math (holidays, offsets, ranges) | 13 |
 | **kr-beneish** | `../kr-beneish` | Beneish M-Score for Korean IFRS companies | 61 |
 | **jfia-catalog** | `../jfia-catalog` | 469 JFIA forensic accounting articles (structured JSON) | — |
 
@@ -21,7 +21,7 @@ Eight projects, one platform. Each is an independent git repo with its own CLAUD
 
 | Project | Path | Purpose | Tests |
 |---------|------|---------|-------|
-| **kr-derivatives** | `../kr-derivatives` | CB/BW option pricing + ITM issuance detection | 118 |
+| **kr-derivatives** | `../kr-derivatives` | CB/BW option pricing + ITM issuance detection | 111 |
 | **jfia-forensic** | `../jfia-forensic` | Detectlet schema, JFIA enrichment pipeline, signal vocabulary | 83 |
 | **kr-enforcement-cases** | `../kr-enforcement-cases` | FSS/SFC enforcement case dataset + LLM enrichment pipeline | 65 |
 
@@ -30,10 +30,10 @@ Eight projects, one platform. Each is an independent git repo with its own CLAUD
 | Project | Path | Purpose | Tests |
 |---------|------|---------|-------|
 | **kr-forensic-core** | `../kr-forensic-core` | Shared constants, schemas, path conventions (zero deps) | 10 |
-| **kr-dart-pipeline** | `../kr-dart-pipeline` | ETL: 19 extractors (DART/KRX/SEIBRO/KFTC/FSC) → parquet | 6 |
-| **kr-anomaly-scoring** | `../kr-anomaly-scoring` | CB/BW + timing + officer network anomaly scoring | 9 |
+| **kr-dart-pipeline** | `../kr-dart-pipeline` | ETL: 15 extractors (DART/KRX/SEIBRO/KFTC/FSC) → parquet | 29 |
+| **kr-anomaly-scoring** | `../kr-anomaly-scoring` | CB/BW + timing + officer network anomaly scoring | 13 |
 | **kr-stat-tests** | `../kr-stat-tests` | 14 statistical validation tests (PCA, bootstrap, LASSO, RF…) | 5 |
-| **krff-shell** | `../kr-forensic-finance` (dir; pkg=krff-shell) | Delivery shell: CLI, reports, review queue, DuckDB query layer | 306 |
+| **krff-shell** | `../krff-shell` | Delivery shell: CLI, reports, review queue, DuckDB query layer | 317 |
 
 ### Related (not core, potentially relevant)
 
@@ -73,7 +73,7 @@ kr-enforcement-cases produces **enforcement labels** for supervised model traini
 - **Cross-project blockers**: `cross-issues/` in this directory
 - **Business outreach & deadlines**: `knowledge/business/` (gitignored)
 - **Per-project details**: Read the CLAUDE.md in each project's root
-- **Platform strategy docs**: `../kr-forensic-finance/00_Reference/10_Platform_Strategy/`
+- **Platform strategy docs**: `../krff-shell/00_Reference/10_Platform_Strategy/`
 - **Ecosystem status**: `ECOSYSTEM.md` in this directory
 - **Cross-repo operations**: `bash ecosystem.sh <command>` (see below)
 - **Step-by-step workflows**: `WORKFLOW.md` in this directory
@@ -88,7 +88,7 @@ The hub contains `ecosystem.sh` for common multi-repo tasks. Run from the hub di
 bash ecosystem.sh test-all          # Run tests in all repos, report pass/fail
 bash ecosystem.sh test <repo>       # Run tests in one repo
 bash ecosystem.sh status            # Git status across all repos
-bash ecosystem.sh copy-parquets     # Copy kr-forensic-finance outputs → kr-derivatives inputs
+bash ecosystem.sh copy-parquets     # Copy krff-shell outputs → kr-derivatives inputs
 bash ecosystem.sh unpushed          # Show repos with unpushed commits
 ```
 
@@ -155,7 +155,7 @@ Run `/plan conventions` to audit all repos against it. Summary:
 | Build system | hatchling | jfia-catalog (data artifact) |
 | Python | >=3.11 | kr-beneish (>=3.10) |
 | Package manager | uv | — |
-| Test command | `uv run pytest tests/ -v` | kr-forensic-finance: `python -m pytest` |
+| Test command | `uv run pytest tests/ -v` | — |
 | uv.lock | Committed | jfia-catalog |
 | conftest.py | Required if tests exist | — |
 | constants.py | Required if magic strings exist | kr-trading-calendar |
@@ -163,7 +163,7 @@ Run `/plan conventions` to audit all repos against it. Summary:
 | Commit style | feat/fix/docs/refactor/test/chore prefix | — |
 | .claude/ directory | Present | jfia-catalog |
 | compile-bytecode | `false` in `[tool.uv]` | Repos without pyproject.toml |
-| CLAUDE.md | Present at repo root | — |
+| CLAUDE.md | Present at repo root | kr-forensic-core, kr-dart-pipeline, kr-anomaly-scoring, kr-stat-tests (missing; to be added) |
 
 ---
 

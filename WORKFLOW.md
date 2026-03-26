@@ -49,22 +49,22 @@ git push
 
 ## 3. Running the Issuance Dilution Screen (kr-derivatives)
 
-This is the most common multi-repo workflow. It spans kr-forensic-finance (pipeline) and kr-derivatives (screen).
+This is the most common multi-repo workflow. It spans kr-dart-pipeline (ETL) and kr-derivatives (screen).
 
 ### 3a. If pipeline data changed (new extraction)
 
 ```bash
-# In kr-forensic-finance — run the extractor that changed
-cd /c/Users/pon00/Projects/kr-forensic-finance
-uv run python 02_Pipeline/extract_price_volume.py      # or whichever extractor
-uv run python 02_Pipeline/extract_corp_actions.py       # if corporate actions changed
+# In kr-dart-pipeline — run the extractor that changed
+cd /c/Users/pon00/Projects/kr-dart-pipeline
+uv run python kr_dart_pipeline/extract_price_volume.py      # or whichever extractor
+uv run python kr_dart_pipeline/extract_corp_actions.py       # if corporate actions changed
 
 # Sync outputs to kr-derivatives
 cd /c/Users/pon00/Projects/forensic-accounting-toolkit
 bash ecosystem.sh copy-parquets
 ```
 
-This copies `price_volume.parquet`, `cb_bw_events.parquet`, and `corp_actions.parquet` from kr-forensic-finance's output to kr-derivatives' input.
+This copies `price_volume.parquet`, `cb_bw_events.parquet`, and `corp_actions.parquet` from krff-shell's output to kr-derivatives' input.
 
 ### 3b. Run the screen
 
@@ -129,11 +129,16 @@ Test commands per repo:
 
 | Repo | Command |
 |------|---------|
-| kr-forensic-finance | `python -m pytest tests/ -v` |
+| krff-shell | `uv run pytest tests/ -v` |
+| kr-forensic-core | `uv run pytest tests/ -v` |
+| kr-dart-pipeline | `uv run pytest tests/ -v` |
+| kr-anomaly-scoring | `uv run pytest tests/ -v` |
+| kr-stat-tests | `uv run pytest tests/ -v` |
 | kr-beneish | `uv run pytest tests/ -v` |
 | kr-derivatives | `uv run pytest tests/ -v` |
 | kr-trading-calendar | `uv run pytest tests/ -v` |
 | jfia-forensic | `uv run pytest tests/ -v` |
+| kr-enforcement-cases | `uv run pytest tests/ -v` |
 | kr-company-registry | `pytest tests/` |
 | jfia-catalog | (no tests) |
 
@@ -177,12 +182,12 @@ Example: upgrading pykrx across the ecosystem.
 
 ```bash
 # 1. Make the change in the source repo
-cd /c/Users/pon00/Projects/kr-forensic-finance
+cd /c/Users/pon00/Projects/kr-dart-pipeline
 # Edit pyproject.toml
 uv lock && uv sync
 
 # 2. Run tests in the changed repo
-uv run python -m pytest tests/ -v
+uv run pytest tests/ -v
 
 # 3. If pipeline outputs changed, sync downstream
 cd /c/Users/pon00/Projects/forensic-accounting-toolkit
@@ -192,7 +197,7 @@ bash ecosystem.sh copy-parquets
 bash ecosystem.sh test kr-derivatives
 
 # 5. If everything passes, commit and push both
-cd /c/Users/pon00/Projects/kr-forensic-finance
+cd /c/Users/pon00/Projects/kr-dart-pipeline
 git add pyproject.toml uv.lock
 git commit -m "chore: upgrade pykrx to X.Y.Z"
 git push

@@ -1,7 +1,7 @@
 # XB-002: SEIBRO API Returns resultCode=99
 
 **Status**: DEFERRED — revisit end of April 2026
-**Discovered**: kr-forensic-finance (day 4+ of testing)
+**Discovered**: krff-shell (day 4+ of testing)
 **Fix location**: External — 공공데이터포털 is revising the dataset/API
 **Contact**: 공공데이터 문의 1566-0025 / KSD 051-519-1420
 
@@ -20,7 +20,7 @@ SEIBRO API for CB repricing data returns `resultCode=99`. API key is registered 
 
 ## Impact
 
-- Blocks CB repricing Flags 1-2 in kr-forensic-finance Phase 2 CB/BW analysis
+- Blocks CB repricing Flags 1-2 in krff-shell Phase 2 CB/BW analysis
 - Blocks `repricing_coercion_score` in kr-derivatives (Phase 2 feature, currently stubbed)
 - Blocks 2 statistical tests: `survival_repricing.py`, `permutation_repricing_peak.py`
 - DART cannot replace SEIBRO for these specific signals

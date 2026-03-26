@@ -1,14 +1,14 @@
 # Korean Forensic Accounting Ecosystem — Architecture Diagram
 
 > Generated: 2026-03-26
-> 13 repos · 11 code packages · ~800 tests
+> 13 repos · 11 code packages · ~730 tests
 
 ---
 
 ```
 ╔══════════════════════════════════════════════════════════════════════════════════════════╗
 ║                    KOREAN FORENSIC ACCOUNTING ECOSYSTEM                                  ║
-║                    13 repos · 11 code packages · ~800 tests                              ║
+║                    13 repos · 11 code packages · ~730 tests                              ║
 ╚══════════════════════════════════════════════════════════════════════════════════════════╝
 
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
@@ -25,14 +25,14 @@
                                                │
                                                ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│  ETL LAYER — kr-dart-pipeline  (19 extractors)                                          │
+│  ETL LAYER — kr-dart-pipeline  (15 extractors)                                          │
 │                                                                                         │
 │  extract_price_volume   extract_cb_bw      extract_dart       extract_disclosures       │
 │  extract_corp_actions   extract_krx        extract_kftc       extract_major_holders     │
 │  extract_officer_holdings  extract_corp_ticker_map  extract_bondholder_register         │
 │  extract_depreciation_schedule  extract_revenue_schedule  build_isin_map  …            │
 │                                                                                         │
-│  Output → 01_Data/processed/*.parquet (19 files)                                        │
+│  Output → 01_Data/processed/*.parquet (15 files)                                        │
 └──────────────────────────────────────┬──────────────────────────────────────────────────┘
                                        │  parquet files
           ┌────────────────────────────┼────────────────────────────┐
@@ -46,7 +46,7 @@
 │  cb_bw_timelines    │   │  lasso_beneish         │   │  ITM issuance detection        │
 │  timing_anomalies   │   │  rf_feature_importance │   │  moneyness scoring             │
 │  officer_network    │   │  bootstrap_threshold   │   │  dilution screen               │
-│                     │   │  fdr_timing_anomalies  │   │  (118 tests)                   │
+│                     │   │  fdr_timing_anomalies  │   │  (111 tests)                   │
 │  → beneish_scores   │   │  survival_repricing    │   │                                │
 │    .parquet         │   │  cluster_peers  …      │   └────────────────────────────────┘
 └──────────┬──────────┘   └───────────┬────────────┘
@@ -65,10 +65,10 @@
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│  DELIVERY SHELL — krff-shell  (306 tests)                                               │
+│  DELIVERY SHELL — krff-shell  (317 tests)                                               │
 │                                                                                         │
 │  ┌─────────────────┐  ┌──────────────────┐  ┌────────────────────────────────────────┐ │
-│  │   CLI (krff)    │  │   DuckDB Layer   │  │   FastAPI + MCP Server (10 tools)      │ │
+│  │   CLI (krff)    │  │   DuckDB Layer   │  │   FastAPI + MCP Server (11 tools)      │ │
 │  │                 │  │                  │  │                                        │ │
 │  │  krff refresh   │  │  db.py           │  │  mcp_server.py  (FastMCP)              │ │
 │  │  krff status    │  │  query()         │  │  mcp_utils.py   (JSON serialization)   │ │
@@ -109,10 +109,10 @@
 │  ┌──────────────────────────────────────┐   ┌──────────────────────────────────────┐   │
 │  │       kr-company-registry            │   │       kr-trading-calendar            │   │
 │  │                                      │   │                                      │   │
-│  │  3,949 companies                     │   │  KRX trading-day math                │   │
+│  │  3,948 companies                     │   │  KRX trading-day math                │   │
 │  │  DART corp_code ↔ KRX ticker         │   │  holidays, offsets, ranges           │   │
 │  │  ↔ BRN ↔ CRN crosswalk              │   │  is_trading_day(), offset()          │   │
-│  │  (18 tests)                          │   │  (10 tests)                          │   │
+│  │  (18 tests)                          │   │  (13 tests)                          │   │
 │  └───────────────────┬──────────────────┘   └──────────────────┬───────────────────┘   │
 │                      │                                          │                       │
 │                      └──────────────────┬───────────────────────┘                      │
@@ -139,8 +139,8 @@
        │
        ▼
   kr-dart-pipeline  ──────────────────────────────────────────────────────────────────┐
-  (19 extractors)                                                                      │
-       │ 19 *.parquet files                                                            │
+  (15 extractors)                                                                      │
+       │ 15 *.parquet files                                                            │
        ├──────────────────► kr-anomaly-scoring  ──► beneish_scores.parquet ──► krff-shell
        ├──────────────────► kr-stat-tests       ──► validation reports     ──► krff-shell
        └──────────────────► kr-derivatives      ──► CB/BW flags            ──► (standalone)
@@ -154,7 +154,7 @@
   kr-enforcement-cases ──► enforcement labels ──► supervised ML in krff-shell
                                                └──► MCP tool #12 [planned]
 
-  krff-shell  ──► CLI  /  HTML reports (Claude API narrative)  /  MCP server (10 tools)
+  krff-shell  ──► CLI  /  HTML reports (Claude API narrative)  /  MCP server (11 tools)
                    /  DuckDB query layer  /  SQLite review queue
 ```
 
@@ -165,11 +165,11 @@
 | Layer | Repos | What happens |
 |-------|-------|-------------|
 | **External sources** | — | DART filings, KRX prices, KFTC payment data, FSC company records |
-| **ETL** | kr-dart-pipeline | Pulls all sources → 19 `.parquet` files |
+| **ETL** | kr-dart-pipeline | Pulls all sources → 15 `.parquet` files |
 | **Scoring** | kr-anomaly-scoring | Reads parquets → CB/BW + Beneish + officer network flags |
 | **Validation** | kr-stat-tests | 14 statistical tests (PCA, LASSO, bootstrap, survival…) against the same parquets |
 | **Shared foundation** | kr-forensic-core | Constants/schemas imported by all three layers above |
-| **Delivery** | krff-shell | CLI, HTML reports (Claude API narrative), DuckDB query layer, FastMCP server (10 tools), SQLite review queue |
+| **Delivery** | krff-shell | CLI, HTML reports (Claude API narrative), DuckDB query layer, FastMCP server (11 tools), SQLite review queue |
 | **Knowledge** | jfia-catalog → jfia-forensic → MCP #11; kr-enforcement-cases → MCP #12 [planned] | Structured article corpus + detectlet enrichment + enforcement case labels |
 | **Identifiers** | kr-company-registry, kr-trading-calendar | Crosswalk (DART↔KRX↔BRN↔CRN) and trading-day math, consumed by krff-shell |
 | **Fraud scoring** | kr-beneish | Beneish M-Score for Korean IFRS, consumed by krff-shell |
@@ -179,14 +179,14 @@
 | Repo | Tests | Role |
 |------|-------|------|
 | kr-forensic-core | 10 | Zero-dep shared constants, schemas, paths |
-| kr-dart-pipeline | 6 | ETL: 19 extractors → parquets |
-| kr-anomaly-scoring | 9 | CB/BW + timing + officer network scoring |
+| kr-dart-pipeline | 29 | ETL: 15 extractors → parquets |
+| kr-anomaly-scoring | 13 | CB/BW + timing + officer network scoring |
 | kr-stat-tests | 5 | 14 statistical validation scripts |
-| krff-shell | 306 | CLI + reports + MCP server + review queue |
-| kr-company-registry | 18 | 3,949-company identifier crosswalk |
-| kr-trading-calendar | 10 | KRX trading-day math |
+| krff-shell | 317 | CLI + reports + MCP server + review queue |
+| kr-company-registry | 18 | 3,948-company identifier crosswalk |
+| kr-trading-calendar | 13 | KRX trading-day math |
 | kr-beneish | 61 | Beneish M-Score (Korean IFRS) |
-| kr-derivatives | 118 | CB/BW option pricing + ITM detection |
+| kr-derivatives | 111 | CB/BW option pricing + ITM detection |
 | jfia-catalog | — | 469 JFIA articles (data artifact) |
 | jfia-forensic | 83 | Detectlet schema + JFIA enrichment pipeline |
 | kr-enforcement-cases | 65 | 240 FSS/SFC enforcement cases + LLM labels |
