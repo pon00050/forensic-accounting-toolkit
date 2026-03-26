@@ -4,6 +4,37 @@ Audit trail for ecosystem-wide changes coordinated from this hub.
 
 ---
 
+## 2026-03-26 — Documentation audit + Wave 5 automation enforcement
+
+Comprehensive documentation audit across all 13 repos. 60+ discrepancies found and fixed.
+
+**Hub documentation fixes (Wave 1):**
+- `CLAUDE.md` — "Eight" → "Thirteen" repos; updated all test counts; fixed krff-shell path; extractor count 19→15; fixed dependency graph
+- `ECOSYSTEM.md` — kr-derivatives test count 118→111; fixed XB-001 fix location path; added PyPI column note
+- `ARCHITECTURE.md` — updated total test count, extractor count, MCP tool count; per-repo counts corrected
+- `WORKFLOW.md` — replaced 8 kr-forensic-finance refs; added 5 missing repos to test command table
+- `ecosystem.conf` — 7 stale kr-forensic-finance refs replaced with krff-shell
+- `lessons.md` — 1 stale ref fixed
+
+**Wave 5 automation (doc-drift enforcement):**
+- `.claude/settings.json` — fixed stale parquet check path (kr-forensic-finance → krff-shell)
+- `.claude/skills/done/SKILL.md` — step 5b now syncs ECOSYSTEM.md counts + stale name check
+- `.claude/skills/canonical-conventions/SKILL.md` — added convention #14 (stale repo-name refs); updated repo list 8→13
+- `.claude/skills/plan/SKILL.md` — updated repo list 8→13 (added kr-forensic-core, kr-dart-pipeline, kr-anomaly-scoring, kr-stat-tests, kr-enforcement-cases)
+- `triage-scan.sh` — added DOC DRIFT section (SOURCE 8b); fixed 3 stale kr-forensic-finance pipeline paths
+
+**krff-shell fixes (Wave 2):**
+- `CLAUDE.md` — replaced stale src/ → krff/ paths; removed deleted modules
+- `README.md` — all kr-forensic-finance refs replaced; test count updated to 317; split history noted
+
+**Per-repo doc cleanup (Waves 3-4):**
+- 6 per-repo CLAUDE.md files: stale kr-forensic-finance refs replaced
+- 5 README.md files: stale refs replaced
+- 4 new CLAUDE.md files created: kr-forensic-core, kr-dart-pipeline, kr-anomaly-scoring, kr-stat-tests
+- pyproject.toml [project.urls] added: kr-enforcement-cases, jfia-forensic
+
+---
+
 ## 2026-03-16 — XB-002 SEIBRO API: DEFERRED until end of April 2026
 
 Called 공공데이터 문의 (1566-0025). KSD (the providing agency) is not cooperating with data.go.kr
