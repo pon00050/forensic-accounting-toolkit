@@ -16,7 +16,7 @@
 | kr-company-registry | pon00050/kr-company-registry | — | Published (v1.0.0, weekly auto-refresh) |
 | kr-health-monitor | pon00050/kr-health-monitor | — | Published (out of toolkit scope) |
 | kr-beneish | [pon00050/kr-beneish](https://github.com/pon00050/kr-beneish) | **Not published** | Published (2026-03-15). 61 tests. |
-| kr-derivatives | [pon00050/kr-derivatives](https://github.com/pon00050/kr-derivatives) | **Not published** | Published (2026-03-15). 111 tests. Vega/day-count conventions documented. |
+| kr-derivatives | [pon00050/kr-derivatives](https://github.com/pon00050/kr-derivatives) | **Not published** | Published (2026-03-15). 118 tests. Vega/day-count conventions documented. |
 | kr-trading-calendar | [pon00050/kr-trading-calendar](https://github.com/pon00050/kr-trading-calendar) | — | Published (2026-03-15). 13 tests. Non-session snap-direction documented. |
 | jfia-catalog | [pon00050/jfia-catalog](https://github.com/pon00050/jfia-catalog) | — | Published (2026-03-15). Data artifact. |
 | jfia-forensic | [pon00050/jfia-forensic](https://github.com/pon00050/jfia-forensic) | **Not published** | Published (2026-03-15). 83 tests. SIGNAL_SEED_VOCABULARY synced; private attr access fixed; model ID dated. |

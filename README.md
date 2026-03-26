@@ -26,21 +26,22 @@ Seven repositories, one platform. Each is an independent project with its own te
 
 | Repository | Purpose |
 |---|---|
-| [kr-forensic-finance](https://github.com/pon00050/kr-forensic-finance) | 15 extractors, 4 analysis phases, CLI, FastAPI, and MCP server |
+| [krff-shell](https://github.com/pon00050/krff-shell) | Delivery shell: CLI, reports, review queue, DuckDB query layer, MCP server (11 tools) |
 
 ## Dependency graph
 
 ```
-jfia-catalog ──► jfia-forensic ──► kr-forensic-finance
-                                          ▲
-kr-company-registry ──────────────────────┤
-kr-trading-calendar ──────────────────────┤
-kr-beneish ───────────────────────────────┤
-kr-derivatives ───────────────────────────┘
+jfia-catalog ──► jfia-forensic ──► krff-shell
+                                         ▲
+kr-company-registry ─────────────────────┤
+kr-trading-calendar ─────────────────────┤
+kr-beneish ──────────────────────────────┤
+kr-derivatives ──────────────────────────┤
+kr-enforcement-cases ────────────────────┘
 ```
 
-Libraries are standalone. `kr-forensic-finance` is the integration point.
-`kr-derivatives` reads data files from `kr-forensic-finance` (not code imports).
+Libraries are standalone. `krff-shell` is the delivery integration point.
+`kr-derivatives` reads data files from `kr-dart-pipeline` outputs (not code imports).
 
 ## What's in this repo
 

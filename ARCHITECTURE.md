@@ -1,14 +1,14 @@
 # Korean Forensic Accounting Ecosystem — Architecture Diagram
 
 > Generated: 2026-03-26
-> 13 repos · 11 code packages · ~730 tests
+> 13 repos · 11 code packages · ~732 tests
 
 ---
 
 ```
 ╔══════════════════════════════════════════════════════════════════════════════════════════╗
 ║                    KOREAN FORENSIC ACCOUNTING ECOSYSTEM                                  ║
-║                    13 repos · 11 code packages · ~730 tests                              ║
+║                    13 repos · 11 code packages · ~732 tests                              ║
 ╚══════════════════════════════════════════════════════════════════════════════════════════╝
 
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
@@ -46,7 +46,7 @@
 │  cb_bw_timelines    │   │  lasso_beneish         │   │  ITM issuance detection        │
 │  timing_anomalies   │   │  rf_feature_importance │   │  moneyness scoring             │
 │  officer_network    │   │  bootstrap_threshold   │   │  dilution screen               │
-│                     │   │  fdr_timing_anomalies  │   │  (111 tests)                   │
+│                     │   │  fdr_timing_anomalies  │   │  (118 tests)                   │
 │  → beneish_scores   │   │  survival_repricing    │   │                                │
 │    .parquet         │   │  cluster_peers  …      │   └────────────────────────────────┘
 └──────────┬──────────┘   └───────────┬────────────┘
@@ -186,7 +186,7 @@
 | kr-company-registry | 18 | 3,948-company identifier crosswalk |
 | kr-trading-calendar | 13 | KRX trading-day math |
 | kr-beneish | 61 | Beneish M-Score (Korean IFRS) |
-| kr-derivatives | 111 | CB/BW option pricing + ITM detection |
+| kr-derivatives | 118 | CB/BW option pricing + ITM detection |
 | jfia-catalog | — | 469 JFIA articles (data artifact) |
 | jfia-forensic | 83 | Detectlet schema + JFIA enrichment pipeline |
 | kr-enforcement-cases | 65 | 240 FSS/SFC enforcement cases + LLM labels |

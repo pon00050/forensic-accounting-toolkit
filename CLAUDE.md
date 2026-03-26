@@ -21,7 +21,7 @@ Thirteen repos across four layers. Each is an independent git repo.
 
 | Project | Path | Purpose | Tests |
 |---------|------|---------|-------|
-| **kr-derivatives** | `../kr-derivatives` | CB/BW option pricing + ITM issuance detection | 111 |
+| **kr-derivatives** | `../kr-derivatives` | CB/BW option pricing + ITM issuance detection | 118 |
 | **jfia-forensic** | `../jfia-forensic` | Detectlet schema, JFIA enrichment pipeline, signal vocabulary | 83 |
 | **kr-enforcement-cases** | `../kr-enforcement-cases` | FSS/SFC enforcement case dataset + LLM enrichment pipeline | 65 |
 
