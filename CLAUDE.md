@@ -30,9 +30,9 @@ Eight projects, one platform. Each is an independent git repo with its own CLAUD
 | Project | Path | Purpose | Tests |
 |---------|------|---------|-------|
 | **kr-forensic-core** | `../kr-forensic-core` | Shared constants, schemas, path conventions (zero deps) | 10 |
-| **kr-dart-pipeline** | `../kr-dart-pipeline` | ETL: 15 extractors (DART/KRX/SEIBRO/KFTC/FSC) → parquet | — |
-| **kr-anomaly-scoring** | `../kr-anomaly-scoring` | CB/BW + timing + officer network anomaly scoring | — |
-| **kr-stat-tests** | `../kr-stat-tests` | 14 statistical validation tests (PCA, bootstrap, LASSO, RF…) | — |
+| **kr-dart-pipeline** | `../kr-dart-pipeline` | ETL: 19 extractors (DART/KRX/SEIBRO/KFTC/FSC) → parquet | 6 |
+| **kr-anomaly-scoring** | `../kr-anomaly-scoring` | CB/BW + timing + officer network anomaly scoring | 9 |
+| **kr-stat-tests** | `../kr-stat-tests` | 14 statistical validation tests (PCA, bootstrap, LASSO, RF…) | 5 |
 | **krff-shell** | `../kr-forensic-finance` (dir; pkg=krff-shell) | Delivery shell: CLI, reports, review queue, DuckDB query layer | 306 |
 
 ### Related (not core, potentially relevant)

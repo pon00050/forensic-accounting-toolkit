@@ -1,6 +1,6 @@
 # Ecosystem Status
 
-> Last updated: 2026-03-17
+> Last updated: 2026-03-26
 
 ---
 
@@ -10,9 +10,9 @@
 |------|--------|------|--------|
 | krff-shell (was kr-forensic-finance) | pon00050/krff-shell | — | Published (renamed 2026-03-26; local dir still kr-forensic-finance) |
 | kr-forensic-core | pon00050/kr-forensic-core | — | Created 2026-03-26. 10 tests. Shared foundation. |
-| kr-dart-pipeline | pon00050/kr-dart-pipeline | — | Pending creation |
-| kr-anomaly-scoring | pon00050/kr-anomaly-scoring | — | Pending creation |
-| kr-stat-tests | pon00050/kr-stat-tests | — | Pending creation |
+| kr-dart-pipeline | pon00050/kr-dart-pipeline | — | Published 2026-03-26. 6 tests. 19 pipeline scripts. |
+| kr-anomaly-scoring | pon00050/kr-anomaly-scoring | — | Published 2026-03-26. 9 tests. 8 scoring modules. |
+| kr-stat-tests | pon00050/kr-stat-tests | — | Published 2026-03-26. 5 tests. 14 stat validation scripts. |
 | kr-company-registry | pon00050/kr-company-registry | — | Published (v1.0.0, weekly auto-refresh) |
 | kr-health-monitor | pon00050/kr-health-monitor | — | Published (out of toolkit scope) |
 | kr-beneish | [pon00050/kr-beneish](https://github.com/pon00050/kr-beneish) | **Not published** | Published (2026-03-15). 61 tests. |
