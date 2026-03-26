@@ -295,19 +295,25 @@ echo ""
 # SOURCE 8b: Doc drift — stale repo-name references
 # ─────────────────────────────────────────────
 echo "--- DOC DRIFT ---"
-stale_doc_files=$(grep -rl "kr-forensic-finance" \
-    "$BASE"/*/CLAUDE.md \
-    "$BASE"/*/README.md \
-    "$HUB"/*.conf \
-    "$HUB"/ARCHITECTURE.md \
-    "$HUB"/ECOSYSTEM.md \
-    "$HUB"/WORKFLOW.md \
-    "$HUB"/lessons.md \
+# Build scan targets from ecosystem repo list (avoids scanning unrelated projects)
+_DOC_SCAN_TARGETS=()
+for _r in "${ALL_REPOS[@]}"; do
+    [ -f "$BASE/$_r/CLAUDE.md" ] && _DOC_SCAN_TARGETS+=("$BASE/$_r/CLAUDE.md")
+    [ -f "$BASE/$_r/README.md" ] && _DOC_SCAN_TARGETS+=("$BASE/$_r/README.md")
+done
+_DOC_SCAN_TARGETS+=("$HUB/ARCHITECTURE.md" "$HUB/ECOSYSTEM.md" "$HUB/WORKFLOW.md" "$HUB/lessons.md")
+for _f in "$HUB"/*.conf; do [ -f "$_f" ] && _DOC_SCAN_TARGETS+=("$_f"); done
+
+stale_doc_files=$(grep -rl "kr-forensic-finance" "${_DOC_SCAN_TARGETS[@]}" \
     2>/dev/null | grep -v "\.git" | grep -v "reports/" | grep -v ".venv" \
     | while read -r f; do
-        # Skip files where ALL occurrences are in "Previously known as" lines (historical rename notes)
-        non_historical=$(grep "kr-forensic-finance" "$f" 2>/dev/null | grep -v "Previously known as" | wc -l | tr -d ' ')
-        [ "$non_historical" -gt 0 ] && echo "$f"
+        # Exclude historical rename notes, and meta-references (backtick-quoted pattern names)
+        real_stale=$(grep "kr-forensic-finance" "$f" 2>/dev/null \
+            | grep -v "Previously known as" \
+            | grep -v '`kr-forensic-finance`' \
+            | grep -v '"kr-forensic-finance"' \
+            | wc -l | tr -d ' ')
+        [ "$real_stale" -gt 0 ] && echo "$f"
     done || true)
 if [ -n "$stale_doc_files" ]; then
     stale_count=$(echo "$stale_doc_files" | wc -l | tr -d ' ')

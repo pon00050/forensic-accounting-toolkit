@@ -4,6 +4,21 @@ Audit trail for ecosystem-wide changes coordinated from this hub.
 
 ---
 
+## 2026-03-26 — Documentation maintenance automation (hooks + CLAUDE.md)
+
+Added automatic documentation hygiene enforcement via 3 new hooks:
+- `post-edit-stale-check.py` (PostToolUse/Edit + Write): warns on stale `kr-forensic-finance` at the moment of file edit
+- `post-commit-test-sync.py` (PostToolUse/Bash): detects test count drift after any `git commit`
+- `stop-doc-drift-scan.sh` (Stop): sweeps all ecosystem docs at session end
+
+Also:
+- Documented all automation mechanisms in hub `CLAUDE.md` § Documentation Maintenance
+- Fixed false-positive edge case in DOC DRIFT checks: backtick-quoted meta-references and CHANGELOG historical records no longer trigger
+- Scoped DOC DRIFT scan to ecosystem repos only (avoids unrelated sibling projects)
+- Fixed kr-company-registry upstream tracking branch
+
+---
+
 ## 2026-03-26 — Documentation audit + Wave 5 automation enforcement
 
 Comprehensive documentation audit across all 13 repos. 60+ discrepancies found and fixed.

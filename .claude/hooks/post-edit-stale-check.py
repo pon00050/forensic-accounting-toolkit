@@ -28,11 +28,19 @@ try:
 except Exception:
     sys.exit(0)
 
-# Collect lines with stale name, excluding known-good historical references
+# Collect lines with stale name, excluding known-good references:
+# - "Previously known as" lines (historical rename notes)
+# - Lines where the name is quoted as a search pattern (backtick or grep string)
 hits = []
 for i, line in enumerate(lines, 1):
-    if "kr-forensic-finance" in line and "Previously known as" not in line:
-        hits.append((i, line.strip()))
+    if "kr-forensic-finance" not in line:
+        continue
+    if "Previously known as" in line:
+        continue
+    # Skip lines where it appears as a quoted code/grep pattern (meta-reference)
+    if "`kr-forensic-finance`" in line or '"kr-forensic-finance"' in line:
+        continue
+    hits.append((i, line.strip()))
 
 if not hits:
     sys.exit(0)
