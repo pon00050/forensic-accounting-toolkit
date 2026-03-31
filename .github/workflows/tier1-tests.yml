@@ -19,7 +19,7 @@ jobs:
       matrix:
         include:
           - repo: kr-company-registry
-            test_cmd: "pytest tests/ -v"
+            test_cmd: "uv run pytest tests/ -v"
             needs_siblings: false
           - repo: kr-trading-calendar
             test_cmd: "uv run pytest tests/ -v"
@@ -88,19 +88,32 @@ jobs:
           repository: pon00050/kr-dart-pipeline
           path: _deps/kr-dart-pipeline
 
+      - name: Checkout kr-anomaly-scoring (sibling for krff-shell)
+        if: matrix.repo == 'krff-shell'
+        uses: actions/checkout@v4
+        with:
+          repository: pon00050/kr-anomaly-scoring
+          path: _deps/kr-anomaly-scoring
+
+      - name: Checkout kr-stat-tests (sibling for krff-shell)
+        if: matrix.repo == 'krff-shell'
+        uses: actions/checkout@v4
+        with:
+          repository: pon00050/kr-stat-tests
+          path: _deps/kr-stat-tests
+
       - name: Symlink sibling repos to expected relative paths
         if: matrix.needs_siblings
         run: |
-          parent=$(dirname "$GITHUB_WORKSPACE")
-          for repo in kr-forensic-core kr-trading-calendar kr-company-registry kr-dart-pipeline; do
+          # Symlinks go at $GITHUB_WORKSPACE/<dep> so that relative paths like
+          # ../kr-forensic-core resolve correctly from $GITHUB_WORKSPACE/<repo>/
+          for repo in kr-forensic-core kr-trading-calendar kr-company-registry kr-dart-pipeline kr-anomaly-scoring kr-stat-tests; do
             src="$GITHUB_WORKSPACE/_deps/$repo"
-            dst="$parent/$repo"
+            dst="$GITHUB_WORKSPACE/$repo"
             if [ -d "$src" ] && [ ! -e "$dst" ]; then
               ln -s "$src" "$dst"
             fi
           done
-          # Also symlink the main repo
-          ln -sf "$GITHUB_WORKSPACE/${{ matrix.repo }}" "$parent/${{ matrix.repo }}" 2>/dev/null || true
 
       - uses: astral-sh/setup-uv@v7
         with:
@@ -108,14 +121,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: ${{ matrix.repo }}
-        run: |
-          if [ -f "pyproject.toml" ]; then
-            uv sync --extra dev 2>/dev/null || uv sync || true
-          fi
-          # kr-company-registry uses bare pytest
-          if [ "${{ matrix.repo }}" = "kr-company-registry" ]; then
-            pip install pytest pytest-cov 2>/dev/null || true
-          fi
+        run: uv sync --extra dev 2>/dev/null || uv sync
 
       - name: Run tests
         id: run_tests

@@ -4,6 +4,28 @@ Audit trail for ecosystem-wide changes coordinated from this hub.
 
 ---
 
+## 2026-03-31 — CI/CD agent team fixes (tier1-tests + kr-beneish)
+
+Addressed P0/P1 findings from first tier2-triage run (Issue #2):
+
+**tier1-tests.yml — three bugs fixed:**
+- Symlink path was `$PARENT/<dep>` but uv resolves relative paths from `$GITHUB_WORKSPACE/<repo>/`, so `../kr-forensic-core` hit `$GITHUB_WORKSPACE/kr-forensic-core` (missing). Changed to `ln -s _deps/<dep> $GITHUB_WORKSPACE/<dep>`.
+- krff-shell was missing kr-anomaly-scoring and kr-stat-tests sibling checkouts, causing `Failed to generate package metadata` on `uv sync`.
+- kr-company-registry was special-cased to bare `pip install pytest pytest-cov` (no pandas), despite having pyproject.toml with pandas in deps. Removed special case; now uses standard `uv sync --extra dev`.
+
+**kr-beneish/_components.py — shift(1) year-gap guard:**
+- `groupby("corp_code")[col].shift(1)` silently paired current-year data with wrong prior-year data when a company had non-consecutive years (e.g., 2019 → 2021). Added a post-shift guard that nulls all lag columns for rows where `year_l != year - 1`. All 61 tests pass.
+
+**Hub .gitignore:**
+- Added `_deps/` and `_scratchpad/` (created by CI runner during summary jobs; should not appear as untracked).
+
+**Items deferred (human-actionable):**
+- krff-shell missing parquets (price_volume, cb_bw_events, corp_actions): run `bash ecosystem.sh copy-parquets` after next pipeline run.
+- kr-derivatives input data blocked: same prerequisite.
+- jfia-catalog missing abstracts/keywords: data quality issue, not code.
+
+---
+
 ## 2026-03-26 — Documentation maintenance automation (hooks + CLAUDE.md)
 
 Added automatic documentation hygiene enforcement via 3 new hooks:
