@@ -44,7 +44,7 @@ jobs:
               json.dump(data, f, indent=2)
           print('Fix brief:', json.dumps(data, indent=2))
           "
-          else:
+          else
             echo '${{ github.event.inputs.fix_brief }}' > _scratchpad/fix-brief.json
           fi
 
