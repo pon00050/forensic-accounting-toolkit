@@ -21,7 +21,7 @@ All Python commands MUST use these wrappers to avoid Windows encoding issues:
 
 ```bash
 # Always set encoding for Python output
-cd /c/Users/pon00/Projects/kr-forensic-finance && PYTHONIOENCODING=utf-8 uv run python -c "..."
+cd /c/Users/pon00/Projects/krff-shell && PYTHONIOENCODING=utf-8 uv run python -c "..."
 
 # Always read .env with explicit encoding
 from pathlib import Path
@@ -186,6 +186,6 @@ Recommendation:
 - **Read-only.** Do NOT fix code or data. This is a diagnostic tool.
 - **Always use PYTHONIOENCODING=utf-8** for all Python invocations.
 - **Never print raw Korean text** — extract only numeric/date fields from DART responses.
-- **Run from kr-forensic-finance directory** (has pykrx and DART API key in .env).
+- **Run from krff-shell directory** (has pykrx and DART API key in .env).
 - **Limit to 10 corp_codes per run** to avoid DART API rate limits. If more than 10, diagnose the top 10 by moneyness and extrapolate.
 - **If pykrx `adjusted=False` returns empty**, note the version and mark as INCONCLUSIVE. Do not guess.

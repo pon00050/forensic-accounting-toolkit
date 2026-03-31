@@ -15,7 +15,7 @@ This is the authoritative convention table for the Korean forensic accounting ec
 | 1 | Build system | `hatchling` (`requires = ["hatchling"]` in `[build-system]`) | `grep build-backend pyproject.toml` | jfia-catalog (data artifact, no build system required) |
 | 2 | Python version | `>=3.11` in `[project] requires-python` | `grep requires-python pyproject.toml` | kr-beneish: `>=3.10` is acceptable |
 | 3 | Package manager | `uv` (never pip) | Check CLAUDE.md mentions uv; no `requirements.txt` present | — |
-| 4 | Test invocation | `uv run pytest tests/ -v` | Check CLAUDE.md for test command | kr-forensic-finance: `python -m pytest` is acceptable |
+| 4 | Test invocation | `uv run pytest tests/ -v` | Check CLAUDE.md for test command | kr-company-registry: bare `pytest tests/ -v` is acceptable (no uv wrapper needed) |
 | 5 | uv.lock committed | File tracked in git | `git -C <repo> ls-files uv.lock` | jfia-catalog (no dependencies) |
 | 6 | conftest.py present | Required in repos that have a `tests/` directory | `test -f tests/conftest.py` | Repos without tests/ are exempt |
 | 7 | constants.py present | Required in repos with magic strings/thresholds in code | Check for `src/*/constants.py` or `src/constants.py` | kr-trading-calendar (no magic strings beyond holiday list) |

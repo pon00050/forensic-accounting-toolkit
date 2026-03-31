@@ -99,7 +99,7 @@ Scan the entire ecosystem for actionable work and produce a prioritized task lis
    Gaps discovered:
      5. [OPEN STUB]   kr-derivatives — repricing engine has NotImplementedError
                       Why: core functionality, blocked only by SEIBRO data
-     6. [INTEGRATION] kr-enforcement-cases — enforcement labels not yet consumed by kr-forensic-finance
+     6. [INTEGRATION] kr-enforcement-cases — enforcement labels not yet consumed by krff-shell
                       Why: violations.csv exists but label pipeline not wired
 
    Blocked (informational):

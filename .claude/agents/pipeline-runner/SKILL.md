@@ -1,6 +1,6 @@
 ---
 name: pipeline-runner
-description: Runs the kr-forensic-finance ETL pipeline with pre/post validation. Use when data needs refreshing, after dependency updates, or when triage shows stale parquets. Reads CLAUDE.md before running.
+description: Runs the krff-shell ETL pipeline with pre/post validation. Use when data needs refreshing, after dependency updates, or when triage shows stale parquets. Reads CLAUDE.md before running.
 tools: Bash, Read, Glob, Grep
 model: sonnet
 memory: project
@@ -12,16 +12,16 @@ All repos live under `C:\Users\pon00\Projects\`.
 
 ## Before running
 
-1. Read `../kr-forensic-finance/CLAUDE.md` for the current test command, conventions, and any known issues.
+1. Read `../krff-shell/CLAUDE.md` for the current test command, conventions, and any known issues.
 2. Check data freshness:
    ```bash
-   ls -la ../kr-forensic-finance/01_Data/processed/*.parquet 2>/dev/null | awk '{print $6, $7, $9}'
+   ls -la ../krff-shell/01_Data/processed/*.parquet 2>/dev/null | awk '{print $6, $7, $9}'
    ```
 3. If parquets are <24h old and no `--force` was requested, report "data is fresh, skipping" and exit.
 
 ## Pipeline execution
 
-Run from `../kr-forensic-finance/`:
+Run from `../krff-shell/`:
 
 ```bash
 # Stage 1: DART extraction

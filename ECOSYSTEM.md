@@ -14,7 +14,7 @@
 | kr-anomaly-scoring | pon00050/kr-anomaly-scoring | — | Published 2026-03-26. 13 tests. 8 scoring modules. sys.path hacks removed. |
 | kr-stat-tests | pon00050/kr-stat-tests | — | Published 2026-03-26. 5 tests. 14 stat validation scripts. |
 | kr-company-registry | pon00050/kr-company-registry | — | Published (v1.0.0, weekly auto-refresh) |
-| kr-health-monitor | pon00050/kr-health-monitor | — | Published (out of toolkit scope) |
+| kr-health-monitor | pon00050/kr-health-monitor | — | Published (out of toolkit scope). Not in ecosystem.conf — on-hold, policy infra complete, no active work. |
 | kr-beneish | [pon00050/kr-beneish](https://github.com/pon00050/kr-beneish) | **Not published** | Published (2026-03-15). 61 tests. |
 | kr-derivatives | [pon00050/kr-derivatives](https://github.com/pon00050/kr-derivatives) | **Not published** | Published (2026-03-15). 118 tests. Vega/day-count conventions documented. |
 | kr-trading-calendar | [pon00050/kr-trading-calendar](https://github.com/pon00050/kr-trading-calendar) | — | Published (2026-03-15). 13 tests. Non-session snap-direction documented. |

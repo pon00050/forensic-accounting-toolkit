@@ -26,13 +26,19 @@ All repos live under `C:\Users\pon00\Projects\`:
 | Repo | Role | Key files |
 |------|------|-----------|
 | forensic-accounting-toolkit | Hub | CLAUDE.md, ECOSYSTEM.md, CHANGELOG.md |
-| kr-forensic-finance | Platform | CLAUDE.md, .claude/CLAUDE.md, src/, 02_Pipeline/, 03_Analysis/ |
 | kr-company-registry | Foundation | CLAUDE.md, src/build_crosswalk.py, data/dist/ |
-| kr-beneish | Foundation | CLAUDE.md, src/kr_beneish/ |
-| kr-derivatives | Analysis | CLAUDE.md, src/kr_derivatives/ |
 | kr-trading-calendar | Foundation | CLAUDE.md, src/kr_trading_calendar/ |
+| kr-beneish | Foundation | CLAUDE.md, src/kr_beneish/ |
 | jfia-catalog | Foundation | CLAUDE.md, jfia_catalog.json |
+| kr-derivatives | Analysis | CLAUDE.md, src/kr_derivatives/ |
 | jfia-forensic | Analysis | CLAUDE.md, src/jfia_forensic/ |
+| kr-enforcement-cases | Analysis | CLAUDE.md, src/kr_enforcement_cases/ |
+| kr-forensic-core | Platform | CLAUDE.md, src/kr_forensic_core/ |
+| kr-dart-pipeline | Platform | CLAUDE.md, src/kr_dart_pipeline/, 02_Pipeline/ |
+| kr-anomaly-scoring | Platform | CLAUDE.md, src/kr_anomaly_scoring/ |
+| kr-stat-tests | Platform | CLAUDE.md, src/kr_stat_tests/ |
+| krff-shell | Platform | CLAUDE.md, src/krff_shell/, 01_Data/, 03_Analysis/ |
+| kr-real-estate | Related | CLAUDE.md, src/ |
 
 ## How to research
 

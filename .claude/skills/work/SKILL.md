@@ -28,14 +28,21 @@ The argument `$ARGUMENTS` is the repo name (e.g., `kr-beneish`, `kr-derivatives`
 5. **Show recent commits**: `git log --oneline -5` — what happened last.
 
 6. **Run tests** (if the project has tests):
-   - kr-forensic-finance: `uv run python -m pytest tests/ -x -q`
-   - kr-beneish: `uv run pytest tests/ -v`
-   - kr-derivatives: `uv run python -m pytest tests/ -v`
+   <!-- SYNC: must match ecosystem.conf REPOS_WITH_TESTS -->
+   - kr-company-registry: `pytest tests/ -v`
    - kr-trading-calendar: `uv run pytest tests/ -v`
-   - jfia-forensic: `uv run python -m pytest tests/ -v`
-   - kr-company-registry: `pytest tests/`
+   - kr-beneish: `uv run pytest tests/ -v`
+   - kr-derivatives: `uv run pytest tests/ -v`
+   - jfia-forensic: `uv run pytest tests/ -v`
+   - kr-enforcement-cases: `uv run pytest tests/ -v`
+   - kr-forensic-core: `uv run pytest tests/ -v`
+   - krff-shell: `uv run pytest tests/ -v`
+   - kr-dart-pipeline: `uv run pytest tests/ -v`
+   - kr-anomaly-scoring: `uv run pytest tests/ -v`
+   - kr-stat-tests: `uv run pytest tests/ -v`
    - jfia-catalog: no tests
    - forensic-accounting-toolkit: no tests
+   - kr-real-estate: no tests
 
 7. **Summarize** in 2-3 lines: project purpose, current state, anything needing attention.
 

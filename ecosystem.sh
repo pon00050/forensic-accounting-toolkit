@@ -3,7 +3,7 @@
 # Run from the forensic-accounting-toolkit directory (the hub).
 #
 # Usage:
-#   bash ecosystem.sh test-all          Run tests in all repos (parallel)
+#   bash ecosystem.sh test-all          Run tests in all repos (sequential)
 #   bash ecosystem.sh test <repo>       Run tests in one repo
 #   bash ecosystem.sh status            Git status across all repos
 #   bash ecosystem.sh copy-parquets     Copy pipeline outputs to downstream inputs
@@ -92,7 +92,7 @@ cmd_copy_parquets() {
         if cp "$PIPELINE_SRC/$f" "$PIPELINE_DST/$f" 2>/dev/null; then
             echo "  [OK] $f → kr-derivatives/data/input/"
         else
-            echo "  [--] $f — not found in kr-forensic-finance output"
+            echo "  [--] $f — not found in krff-shell output"
         fi
     done
 }

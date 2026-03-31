@@ -15,16 +15,15 @@
 set -euo pipefail
 
 HUB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-# Local dir is kr-forensic-finance; GitHub/package name is krff-shell
-KRFF_DIR="$(cd "$HUB_DIR/../krff-shell" 2>/dev/null || cd "$HUB_DIR/../kr-forensic-finance" 2>/dev/null && pwd)" || {
-    echo "ERROR: krff-shell not found (tried ../krff-shell and ../kr-forensic-finance)" >&2
+KRFF_DIR="$(cd "$HUB_DIR/../krff-shell" 2>/dev/null && pwd)" || {
+    echo "ERROR: krff-shell not found at ../krff-shell" >&2
     exit 1
 }
 
 ARGS="${*:-}"
 
 cd "$KRFF_DIR"
-exec claude --dangerously-skip-permissions -p "You are a pipeline execution agent running in the krff-shell repo (local dir: kr-forensic-finance).
+exec claude --dangerously-skip-permissions -p "You are a pipeline execution agent running in the krff-shell repo.
 
 Your working context:
 - Current directory: $KRFF_DIR

@@ -67,7 +67,7 @@ Check across repos:
 - Repos with `tests/` but no `conftest.py`
 - Repos with `src/` but no `_paths.py` or `paths.py`
 - Repos where CLAUDE.md references a test command that doesn't match the actual test structure
-- kr-derivatives data path consistency with kr-forensic-finance outputs
+- kr-derivatives data path consistency with krff-shell/kr-dart-pipeline outputs
 
 Use Glob and Grep across `C:\Users\pon00\Projects\*`.
 

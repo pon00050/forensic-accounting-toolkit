@@ -12,12 +12,12 @@ All repos live under `C:\Users\pon00\Projects\`.
 
 ## What to validate
 
-Check every `.parquet` file in `../kr-forensic-finance/01_Data/processed/`:
+Check every `.parquet` file in `../krff-shell/01_Data/processed/`:
 
 ```python
 import pandas as pd, os, glob, time
 
-processed = "../kr-forensic-finance/01_Data/processed"
+processed = "../krff-shell/01_Data/processed"
 files = glob.glob(f"{processed}/*.parquet")
 
 for f in sorted(files):

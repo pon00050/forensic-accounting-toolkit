@@ -14,7 +14,7 @@ Run an end-of-session audit before the human closes the terminal. This is a read
    ```bash
    bash ecosystem.sh status
    ```
-   This checks all 8 repos for uncommitted changes and unpushed commits in one command.
+   This checks all 14 repos for uncommitted changes and unpushed commits in one command.
    If the script is unavailable, fall back to manual iteration over repos in `C:\Users\pon00\Projects\`.
 
 2. **Check the board for stale items:**

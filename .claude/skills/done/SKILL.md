@@ -85,7 +85,7 @@ Wrap up a completed board task with full bookkeeping. The argument `$ARGUMENTS` 
 
    | Source | What to check | How |
    |--------|--------------|-----|
-   | Downstream data | Did this change data files consumed by other repos? | Check if any parquets in `kr-forensic-finance/01_Data/processed/` are newer than copies in `kr-derivatives/data/input/`. If so: `[DATA REFRESH]` |
+   | Downstream data | Did this change data files consumed by other repos? | Check if any parquets in `krff-shell/01_Data/processed/` are newer than copies in `kr-derivatives/data/input/`. If so: `[DATA REFRESH]` |
    | Test ripple | Did downstream tests break? | Run `uv run pytest tests/ -x -q` in repos that consume outputs from the changed repo. If failures: `[TEST FAILURE]` |
    | Convention drift | Did the change introduce convention violations? | Quick check: new files without constants.py patterns, new extractors not counted, missing conftest.py. If drift: `[CONVENTION]` |
    | Unblocked items | Did this unblock board items or backlog items? | Check board Todo and ECOSYSTEM.md backlog for items that reference the completed task or its repo. If unblocked: `[UNBLOCKED]` |

@@ -1,6 +1,6 @@
 ---
 name: ecosystem-status
-description: Health check across all 8 ecosystem repos — uncommitted changes, test status, remote sync
+description: Health check across all 14 ecosystem repos — uncommitted changes, test status, remote sync
 user-invocable: true
 disable-model-invocation: true
 allowed-tools: Bash
@@ -8,18 +8,26 @@ allowed-tools: Bash
 
 Scan all ecosystem repos and report their health. This is a read-only diagnostic.
 
+**Note:** `bash ecosystem.sh status` does the same thing faster from the hub. Use this skill when you want the AI to interpret and summarize the results.
+
 ## Repos to check
 
 All paths relative to `C:\Users\pon00\Projects\`:
 
 1. forensic-accounting-toolkit (hub — no tests)
-2. kr-forensic-finance
-3. kr-company-registry
+2. kr-company-registry
+3. kr-trading-calendar
 4. kr-beneish
-5. kr-derivatives
-6. kr-trading-calendar
-7. jfia-catalog (no tests)
-8. jfia-forensic
+5. jfia-catalog (no tests)
+6. kr-derivatives
+7. jfia-forensic
+8. kr-enforcement-cases
+9. kr-forensic-core
+10. kr-dart-pipeline
+11. kr-anomaly-scoring
+12. kr-stat-tests
+13. krff-shell
+14. kr-real-estate (no tests)
 
 ## For each repo, check
 

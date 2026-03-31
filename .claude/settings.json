@@ -1,4 +1,7 @@
 {
+  "permissions": {
+    "defaultMode": "default"
+  },
   "hooks": {
     "SessionStart": [
       {
@@ -19,6 +22,10 @@
       {
         "matcher": "Bash",
         "hooks": [
+          {
+            "type": "command",
+            "command": "python C:/Users/pon00/Projects/forensic-accounting-toolkit/.claude/hooks/pre-guard-destructive.py"
+          },
           {
             "type": "command",
             "command": "python C:/Users/pon00/Projects/forensic-accounting-toolkit/.claude/hooks/pre-commit-test-guard.py"
@@ -64,7 +71,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'echo \"--- SESSION END CHECK ---\" && cd /c/Users/pon00/Projects/forensic-accounting-toolkit && bash ecosystem.sh status 2>/dev/null | grep -v CLEAN | head -10 && echo \"---\"'"
+            "command": "bash -c 'echo \"--- SESSION END CHECK ---\" && cd /c/Users/pon00/Projects/forensic-accounting-toolkit && bash ecosystem.sh status 2>/dev/null | grep -v OK | head -10 && echo \"---\"'"
           },
           {
             "type": "command",

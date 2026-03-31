@@ -139,7 +139,7 @@ Test commands per repo:
 | kr-trading-calendar | `uv run pytest tests/ -v` |
 | jfia-forensic | `uv run pytest tests/ -v` |
 | kr-enforcement-cases | `uv run pytest tests/ -v` |
-| kr-company-registry | `pytest tests/` |
+| kr-company-registry | `pytest tests/ -v` |
 | jfia-catalog | (no tests) |
 
 ---

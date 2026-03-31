@@ -4,7 +4,7 @@
 When committing from ANY ecosystem repo that has tests, outputs a reminder
 to ensure tests were run. Does NOT block (exit 0) — just reminds.
 
-This is the cross-repo equivalent of kr-forensic-finance's per-edit test hook.
+This is the cross-repo equivalent of krff-shell's per-edit test hook.
 It catches commits in repos that lack their own hooks.
 """
 import json
@@ -12,14 +12,21 @@ import re
 import sys
 from pathlib import Path
 
-# Repos with tests and their test commands
+# Repos with tests and their test commands (sourced from ecosystem.conf logic)
+# All repos use `uv run pytest tests/ -v` except kr-company-registry (no uv wrapper)
+# SYNC: must match ecosystem.conf REPOS_WITH_TESTS (Python cannot source bash)
 TESTABLE_REPOS = {
-    "kr-forensic-finance": "uv run python -m pytest tests/ -x -q",
-    "kr-beneish": "uv run pytest tests/ -v",
-    "kr-derivatives": "uv run python -m pytest tests/ -v",
+    "kr-company-registry": "pytest tests/ -v",
     "kr-trading-calendar": "uv run pytest tests/ -v",
-    "jfia-forensic": "uv run python -m pytest tests/ -v",
-    "kr-company-registry": "pytest tests/",
+    "kr-beneish": "uv run pytest tests/ -v",
+    "kr-derivatives": "uv run pytest tests/ -v",
+    "jfia-forensic": "uv run pytest tests/ -v",
+    "kr-enforcement-cases": "uv run pytest tests/ -v",
+    "kr-forensic-core": "uv run pytest tests/ -v",
+    "krff-shell": "uv run pytest tests/ -v",
+    "kr-dart-pipeline": "uv run pytest tests/ -v",
+    "kr-anomaly-scoring": "uv run pytest tests/ -v",
+    "kr-stat-tests": "uv run pytest tests/ -v",
 }
 
 try:

@@ -53,7 +53,7 @@ Todo — Human:
   ...
 
 Unsurfaced (in backlog, not on board):
-  [P2] kr-enforcement-cases → kr-forensic-finance label integration
+  [P2] kr-enforcement-cases → krff-shell label integration
   ...
 
 Known Gaps (Unblocked, not on board):
@@ -70,9 +70,9 @@ Done: N items
 Build a dependency graph for all open items using these inference rules. Check each rule against the merged task list. A dependency exists only if both tasks are open (not Done).
 
 **Repo-level dependencies** (from CLAUDE.md dependency graph):
-- Any task in `kr-forensic-finance` that changes pipeline outputs → blocks downstream tasks in `kr-derivatives` (data must be synced via `bash ecosystem.sh copy-parquets`)
+- Any task in `krff-shell` or `kr-dart-pipeline` that changes pipeline outputs → blocks downstream tasks in `kr-derivatives` (data must be synced via `bash ecosystem.sh copy-parquets`)
 - Any task in `jfia-catalog` that changes data → blocks downstream tasks in `jfia-forensic`
-- Any task in a foundation library that changes its API → blocks `kr-forensic-finance` tasks that consume it
+- Any task in a foundation library that changes its API → blocks `krff-shell` tasks that consume it
 
 **Data-level dependencies** (from triage signals):
 - If triage shows `[STALE]` parquets → any `kr-derivatives` screen run is blocked until sync
@@ -111,7 +111,7 @@ Execution Order:
     [P1] [AI] kr-derivatives Run 4
 
   Wave 2 (after Wave 1):
-    [P2] [AI] kr-enforcement-cases → kr-forensic-finance label integration
+    [P2] [AI] kr-enforcement-cases → krff-shell label integration
       ↳ waits on: kr-enforcement-cases GitHub publication (done) + label pipeline wiring
 
   Deferred (P3 / future month):

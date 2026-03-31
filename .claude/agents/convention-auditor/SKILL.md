@@ -59,7 +59,7 @@ Convention Audit — [date]
 
 | Repo | Build | Python | uv.lock | conftest | constants | paths | commits | .claude | bytecode | CLAUDE.md |
 |------|-------|--------|---------|----------|-----------|-------|---------|---------|----------|-----------|
-| kr-forensic-finance | OK | OK | OK | OK | OK | OK | OK | OK | OK | OK |
+| krff-shell | OK | OK | OK | OK | OK | OK | OK | OK | OK | OK |
 | kr-beneish | ... | ... | ... | ... | ... | ... | ... | ... | ... | ... |
 | ... | ... | ... | ... | ... | ... | ... | ... | ... | ... | ... |
 
@@ -76,5 +76,5 @@ Top deviations by severity:
 - **Read-only.** Do NOT fix any deviations. Report only.
 - **Do NOT modify any files** except your own agent memory.
 - **Be specific** — for DRIFT items, show the actual value found vs expected.
-- **Check all 12 conventions** for all 8 repos. Do not skip.
+- **Check all 14 conventions** for all 13 repos. Do not skip.
 - **Run efficiently** — batch git commands where possible, respect maxTurns limit.
