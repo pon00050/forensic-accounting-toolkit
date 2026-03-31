@@ -1,0 +1,155 @@
+name: "Orchestrator — Coordinator (Sonnet)"
+
+on:
+  schedule:
+    - cron: "0 6 * * 1,4"   # Mon + Thu 15:00 KST
+  workflow_dispatch:
+
+jobs:
+  orchestrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout hub
+        uses: actions/checkout@v4
+
+      - name: Download all latest scratchpad artifacts
+        # Download in parallel order matches Research phase (Principle #11)
+        continue-on-error: true
+        run: |
+          mkdir -p _scratchpad
+          # Download artifacts from all worker workflows
+          # Use gh CLI to get latest artifact from each workflow
+          ARTIFACTS=(
+            "scratchpad-tests:test-results.json"
+            "scratchpad-triage:triage.json"
+            "scratchpad-convention-audit:convention-audit.json"
+            "scratchpad-doc-drift:doc-drift.json"
+            "scratchpad-count-sync:count-sync.json"
+            "scratchpad-data-validation:data-validation.json"
+            "scratchpad-pipeline:pipeline.json"
+          )
+          for entry in "${ARTIFACTS[@]}"; do
+            artifact_name="${entry%%:*}"
+            file_name="${entry##*:}"
+            gh api "repos/${{ github.repository }}/actions/artifacts?name=${artifact_name}&per_page=1" \
+              --jq '.artifacts[0].id // empty' > /tmp/artifact_id 2>/dev/null || true
+            artifact_id=$(cat /tmp/artifact_id)
+            if [ -n "$artifact_id" ]; then
+              gh api "repos/${{ github.repository }}/actions/artifacts/${artifact_id}/zip" \
+                --header "Accept: application/vnd.github.v3+json" > /tmp/artifact.zip 2>/dev/null && \
+              unzip -o /tmp/artifact.zip "$file_name" -d _scratchpad/ 2>/dev/null && \
+              echo "Downloaded: $file_name" || echo "Could not extract: $file_name"
+            else
+              echo "Artifact not found: $artifact_name"
+            fi
+          done
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Show available scratchpad files
+        run: ls -la _scratchpad/ || echo "Scratchpad empty"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install claude-agent-sdk
+        run: pip install claude-agent-sdk
+
+      - name: Run orchestrator agent (THE COORDINATOR BRAIN)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: python scripts/agents/orchestrator_agent.py
+
+      - name: Upload orchestrator artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scratchpad-orchestrator
+          path: |
+            _scratchpad/orchestrator.json
+            _scratchpad/escalation.md
+          retention-days: 90
+          if-no-files-found: ignore
+
+      - name: Handle escalation
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -f "_scratchpad/escalation.md" ]; then
+            echo "ESCALATION DETECTED — creating urgent issue"
+            gh issue create \
+              --title "[ESCALATION] Orchestrator requires human review" \
+              --body "$(cat _scratchpad/escalation.md)" \
+              --label "needs-human,priority:p0" || true
+          fi
+
+      - name: Post orchestrator summary issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, subprocess, sys
+          from pathlib import Path
+          from datetime import datetime, timezone
+
+          path = Path("_scratchpad/orchestrator.json")
+          if not path.exists():
+              print("No orchestrator.json — skipping summary")
+              sys.exit(0)
+
+          data = json.loads(path.read_text())
+          date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+          health = data.get("ecosystem_health_score", "?")
+          narrative = data.get("health_narrative", "")
+          briefs = data.get("action_briefs", [])
+          needs_human = data.get("needs_human", [])
+          verification = data.get("verification", {})
+
+          p0p1 = [b for b in briefs if b.get("priority") in ("P0", "P1")]
+          p2p3 = [b for b in briefs if b.get("priority") in ("P2", "P3")]
+
+          action_list = "\n".join(
+              f"- [{b['priority']}] `{b.get('repo','?')}`: {b.get('change','')[:100]}"
+              for b in p0p1[:8]
+          ) or "No P0/P1 issues."
+
+          human_list = "\n".join(
+              f"- {h['item']}: {h['reason']}"
+              for h in needs_human
+          ) or "None"
+
+          body = f"""## Ecosystem Orchestrator — {date}
+
+          ### Health: {health}/10
+          {narrative}
+
+          ### P0/P1 Action Items ({len(p0p1)} issues created)
+          {action_list}
+
+          ### P2/P3 ({len(p2p3)} items — batched)
+          See separate issue.
+
+          ### Needs Human
+          {human_list}
+
+          ### Verification
+          - Previous issues resolved: {verification.get('resolved_since_last_run', '?')}
+          - Still open: {verification.get('persistent_unresolved', '?')}
+
+          ---
+          *Generated by orchestrator agent*
+          """
+
+          result = subprocess.run([
+              "gh", "issue", "create",
+              "--title", f"[orchestrator] Ecosystem health {health}/10 — {date}",
+              "--body", body,
+              "--label", "agent:orchestrator",
+          ], capture_output=True, text=True)
+          print("Summary issue:", result.stdout.strip() or result.stderr.strip())
+          PYEOF

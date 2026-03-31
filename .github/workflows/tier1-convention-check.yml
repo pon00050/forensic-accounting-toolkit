@@ -1,0 +1,84 @@
+name: "Tier 1 — Convention Quick Check"
+
+on:
+  schedule:
+    - cron: "30 22 * * *"   # 07:30 KST daily
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout hub
+        uses: actions/checkout@v4
+
+      - name: Checkout all ecosystem repos
+        run: |
+          REPOS=(
+            kr-company-registry kr-trading-calendar kr-beneish kr-derivatives
+            jfia-catalog jfia-forensic kr-enforcement-cases kr-forensic-core
+            krff-shell kr-dart-pipeline kr-anomaly-scoring kr-stat-tests kr-real-estate
+          )
+          for repo in "${REPOS[@]}"; do
+            git clone --depth=1 "https://github.com/pon00050/$repo.git" "_deps/$repo" 2>/dev/null || \
+            echo "Warning: could not clone $repo"
+          done
+
+      - name: Symlink repos
+        run: bash scripts/ci/checkout-ecosystem.sh
+
+      - name: Run convention quick-check
+        run: bash scripts/ci/convention-quick-check.sh
+
+      - name: Upload scratchpad artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scratchpad-convention-quick
+          path: _scratchpad/convention-quick.json
+          retention-days: 90
+
+      - name: Create issue if deviations found
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, subprocess, sys
+          from pathlib import Path
+
+          data = json.loads(Path("_scratchpad/convention-quick.json").read_text())
+          total = data.get("total_deviations", 0)
+          if total == 0:
+              print("All conventions clean — no issue needed")
+              sys.exit(0)
+
+          deviations = data.get("deviations", [])
+          dev_list = "\n".join(
+              f"- [{d['status']}] `{d['repo']}` — {d['convention']}: {d['detail']}"
+              for d in deviations
+          )
+
+          body = f"""## Convention Deviations Detected
+
+          **Total:** {total} ({data['drift_count']} DRIFT, {data['miss_count']} MISS)
+          **Date:** {data['generated_at']}
+
+          ### Deviations
+          {dev_list}
+
+          ### Reference
+          Full convention checklist: `.claude/skills/canonical-conventions/SKILL.md`
+
+          For full 182-check audit, see Sunday's `tier3-convention-audit` workflow.
+          """
+          result = subprocess.run([
+              "gh", "issue", "create",
+              "--title", f"[agent] Convention deviations: {total} issues found",
+              "--body", body,
+              "--label", "agent-task",
+          ], capture_output=True, text=True)
+          if result.returncode == 0:
+              print("Issue created:", result.stdout.strip())
+          else:
+              print("Issue creation skipped:", result.stderr.strip())
+          PYEOF

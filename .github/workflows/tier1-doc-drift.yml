@@ -1,0 +1,96 @@
+name: "Tier 1 — Doc Drift Scan"
+
+on:
+  schedule:
+    - cron: "0 23 * * *"   # 08:00 KST daily
+  push:
+    paths:
+      - "**/*.md"
+      - "**/*.toml"
+      - "**/*.conf"
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout hub
+        uses: actions/checkout@v4
+
+      # Checkout all repos that contain .md/.toml/.conf files
+      - name: Checkout ecosystem repos
+        run: |
+          REPOS=(
+            kr-company-registry kr-trading-calendar kr-beneish kr-derivatives
+            jfia-catalog jfia-forensic kr-enforcement-cases kr-forensic-core
+            krff-shell kr-dart-pipeline kr-anomaly-scoring kr-stat-tests kr-real-estate
+          )
+          for repo in "${REPOS[@]}"; do
+            gh repo clone "pon00050/$repo" "_deps/$repo" -- --depth=1 2>/dev/null || \
+            git clone --depth=1 "https://github.com/pon00050/$repo.git" "_deps/$repo" 2>/dev/null || \
+            echo "Warning: could not clone $repo"
+          done
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Symlink repos
+        run: bash scripts/ci/checkout-ecosystem.sh
+
+      - name: Run doc-drift scan
+        run: bash scripts/ci/doc-drift-scan.sh
+
+      - name: Upload scratchpad artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scratchpad-doc-drift
+          path: _scratchpad/doc-drift.json
+          retention-days: 90
+
+      - name: Create or update issue if drift found
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, subprocess, sys
+          from pathlib import Path
+
+          data = json.loads(Path("_scratchpad/doc-drift.json").read_text())
+          count = data.get("stale_ref_count", 0)
+          if count == 0:
+              print("No doc drift — no issue needed")
+              sys.exit(0)
+
+          findings = data.get("findings", [])
+          files_list = "\n".join(
+              f"- `{f['repo']}/{f['file']}` line {f['line']}: {f['text'][:80]}"
+              for f in findings[:20]
+          )
+          if count > 20:
+              files_list += f"\n... and {count - 20} more"
+
+          body = f"""## Stale Repo Name References Found
+
+          **Count:** {count} occurrences of `kr-forensic-finance`
+          **Date:** {data['generated_at']}
+
+          ### Files to fix
+          {files_list}
+
+          ### Fix
+          Replace `kr-forensic-finance` with the correct current repo name (`krff-shell`
+          for the delivery shell, or the specific repo name as appropriate).
+
+          Exclude: files under `reports/` (historical), backtick code spans, "previously known as" lines.
+          """
+          result = subprocess.run([
+              "gh", "issue", "create",
+              "--title", f"[agent] Doc drift: {count} stale kr-forensic-finance references",
+              "--body", body,
+              "--label", "agent-task",
+          ], capture_output=True, text=True)
+          if result.returncode == 0:
+              print("Issue created:", result.stdout.strip())
+          else:
+              print("Issue creation skipped:", result.stderr.strip())
+          PYEOF

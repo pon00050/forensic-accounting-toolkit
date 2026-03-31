@@ -1,0 +1,111 @@
+name: "Tier 1 — Test Count Sync"
+
+on:
+  workflow_run:
+    workflows: ["Tier 1 — Cross-Repo Tests"]
+    types: [completed]
+  workflow_dispatch:
+
+jobs:
+  count-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout hub
+        uses: actions/checkout@v4
+
+      - name: Checkout repos with test suites
+        run: |
+          REPOS=(
+            kr-company-registry kr-trading-calendar kr-beneish kr-derivatives
+            jfia-forensic kr-enforcement-cases kr-forensic-core
+            krff-shell kr-dart-pipeline kr-anomaly-scoring kr-stat-tests
+          )
+          for repo in "${REPOS[@]}"; do
+            git clone --depth=1 "https://github.com/pon00050/$repo.git" "_deps/$repo" 2>/dev/null || \
+            echo "Warning: could not clone $repo"
+          done
+          # Platform repos need kr-forensic-core
+          git clone --depth=1 "https://github.com/pon00050/kr-forensic-core.git" "_deps_extra/kr-forensic-core" 2>/dev/null || true
+
+      - name: Symlink repos
+        run: bash scripts/ci/checkout-ecosystem.sh
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install uv for all repos
+        run: |
+          REPOS=(
+            kr-trading-calendar kr-beneish kr-derivatives jfia-forensic
+            kr-enforcement-cases kr-forensic-core krff-shell kr-dart-pipeline
+            kr-anomaly-scoring kr-stat-tests
+          )
+          PARENT="$(dirname "$GITHUB_WORKSPACE")"
+          for repo in "${REPOS[@]}"; do
+            rpath="$PARENT/$repo"
+            if [ -d "$rpath" ] && [ -f "$rpath/pyproject.toml" ]; then
+              cd "$rpath"
+              uv sync 2>/dev/null || true
+              cd "$GITHUB_WORKSPACE"
+            fi
+          done
+          # kr-company-registry uses bare pytest
+          pip install pytest 2>/dev/null || true
+
+      - name: Run count-sync check
+        run: bash scripts/ci/count-sync-check.sh
+
+      - name: Upload scratchpad artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scratchpad-count-sync
+          path: _scratchpad/count-sync.json
+          retention-days: 90
+
+      - name: Create issue if mismatch found
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, subprocess, sys
+          from pathlib import Path
+
+          data = json.loads(Path("_scratchpad/count-sync.json").read_text())
+          count = data.get("mismatch_count", 0)
+          if count == 0:
+              print("All test counts match CLAUDE.md — no issue needed")
+              sys.exit(0)
+
+          mismatches = data.get("mismatches", [])
+          mismatch_list = "\n".join(
+              f"- `{m['repo']}`: actual={m['actual']}, claimed={m['claimed']}"
+              for m in mismatches
+          )
+
+          body = f"""## Test Count Drift in CLAUDE.md
+
+          **Mismatches:** {count}
+          **Date:** {data['generated_at']}
+
+          ### Drifted repos
+          {mismatch_list}
+
+          ### Fix
+          Update the test count column in the hub `CLAUDE.md` ecosystem table
+          for the repos listed above.
+
+          Actual counts from `pytest --co -q`: see `_scratchpad/count-sync.json`
+          """
+          result = subprocess.run([
+              "gh", "issue", "create",
+              "--title", f"[agent] Test count drift: {count} repos out of sync in CLAUDE.md",
+              "--body", body,
+              "--label", "agent-task",
+          ], capture_output=True, text=True)
+          if result.returncode == 0:
+              print("Issue created:", result.stdout.strip())
+          else:
+              print("Issue creation skipped:", result.stderr.strip())
+          PYEOF

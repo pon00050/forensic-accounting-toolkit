@@ -1,0 +1,263 @@
+name: "Tier 1 — Cross-Repo Tests"
+
+on:
+  schedule:
+    - cron: "0 22 * * *"   # 07:00 KST daily
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: "test (${{ matrix.repo }})"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - repo: kr-company-registry
+            test_cmd: "pytest tests/ -v"
+            needs_siblings: false
+          - repo: kr-trading-calendar
+            test_cmd: "uv run pytest tests/ -v"
+            needs_siblings: false
+          - repo: kr-beneish
+            test_cmd: "uv run pytest tests/ -v"
+            needs_siblings: false
+          - repo: kr-derivatives
+            test_cmd: "uv run pytest tests/ -v"
+            needs_siblings: false
+          - repo: jfia-forensic
+            test_cmd: "uv run pytest tests/ -v"
+            needs_siblings: false
+          - repo: kr-enforcement-cases
+            test_cmd: "uv run pytest tests/ -v"
+            needs_siblings: false
+          - repo: kr-forensic-core
+            test_cmd: "uv run pytest tests/ -v"
+            needs_siblings: false
+          - repo: kr-dart-pipeline
+            test_cmd: "uv run pytest tests/ -v"
+            needs_siblings: true
+          - repo: kr-anomaly-scoring
+            test_cmd: "uv run pytest tests/ -v"
+            needs_siblings: true
+          - repo: kr-stat-tests
+            test_cmd: "uv run pytest tests/ -v"
+            needs_siblings: true
+          - repo: krff-shell
+            test_cmd: "uv run pytest tests/ -v"
+            needs_siblings: true
+
+    steps:
+      - name: Checkout ${{ matrix.repo }}
+        uses: actions/checkout@v4
+        with:
+          repository: pon00050/${{ matrix.repo }}
+          path: ${{ matrix.repo }}
+
+      # Sibling repos needed by platform repos (kr-forensic-core + pipeline deps)
+      - name: Checkout kr-forensic-core (sibling)
+        if: matrix.needs_siblings
+        uses: actions/checkout@v4
+        with:
+          repository: pon00050/kr-forensic-core
+          path: _deps/kr-forensic-core
+
+      - name: Checkout kr-trading-calendar (sibling)
+        if: matrix.needs_siblings
+        uses: actions/checkout@v4
+        with:
+          repository: pon00050/kr-trading-calendar
+          path: _deps/kr-trading-calendar
+
+      - name: Checkout kr-company-registry (sibling)
+        if: matrix.needs_siblings
+        uses: actions/checkout@v4
+        with:
+          repository: pon00050/kr-company-registry
+          path: _deps/kr-company-registry
+
+      - name: Checkout kr-dart-pipeline (sibling for anomaly/stat/krff)
+        if: matrix.repo == 'kr-anomaly-scoring' || matrix.repo == 'kr-stat-tests' || matrix.repo == 'krff-shell'
+        uses: actions/checkout@v4
+        with:
+          repository: pon00050/kr-dart-pipeline
+          path: _deps/kr-dart-pipeline
+
+      - name: Symlink sibling repos to expected relative paths
+        if: matrix.needs_siblings
+        run: |
+          parent=$(dirname "$GITHUB_WORKSPACE")
+          for repo in kr-forensic-core kr-trading-calendar kr-company-registry kr-dart-pipeline; do
+            src="$GITHUB_WORKSPACE/_deps/$repo"
+            dst="$parent/$repo"
+            if [ -d "$src" ] && [ ! -e "$dst" ]; then
+              ln -s "$src" "$dst"
+            fi
+          done
+          # Also symlink the main repo
+          ln -sf "$GITHUB_WORKSPACE/${{ matrix.repo }}" "$parent/${{ matrix.repo }}" 2>/dev/null || true
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.repo }}
+        run: |
+          if [ -f "pyproject.toml" ]; then
+            uv sync --extra dev 2>/dev/null || uv sync || true
+          fi
+          # kr-company-registry uses bare pytest
+          if [ "${{ matrix.repo }}" = "kr-company-registry" ]; then
+            pip install pytest pytest-cov 2>/dev/null || true
+          fi
+
+      - name: Run tests
+        id: run_tests
+        working-directory: ${{ matrix.repo }}
+        run: ${{ matrix.test_cmd }}
+        continue-on-error: true
+
+      - name: Collect result
+        run: |
+          STATUS="${{ steps.run_tests.outcome }}"
+          echo "REPO=${{ matrix.repo }}" >> "$GITHUB_OUTPUT"
+          echo "STATUS=$STATUS" >> "$GITHUB_OUTPUT"
+        id: result
+
+      - name: Upload test result
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-result-${{ matrix.repo }}
+          path: ${{ matrix.repo }}/test-results*.xml
+          if-no-files-found: ignore
+
+  summary:
+    name: "Test Summary"
+    runs-on: ubuntu-latest
+    needs: test
+    if: always()
+    steps:
+      - name: Checkout hub
+        uses: actions/checkout@v4
+
+      - name: Build test-results.json
+        run: |
+          mkdir -p _scratchpad
+          python3 - <<'PYEOF'
+          import json, os
+          from datetime import datetime, timezone
+
+          # Read job results from the matrix — GitHub sets outcome in needs context
+          # We reconstruct from workflow job results via gh CLI
+          results = {}
+          REPOS = [
+              "kr-company-registry","kr-trading-calendar","kr-beneish","kr-derivatives",
+              "jfia-forensic","kr-enforcement-cases","kr-forensic-core","kr-dart-pipeline",
+              "kr-anomaly-scoring","kr-stat-tests","krff-shell"
+          ]
+          # Will be populated by the gh CLI step below
+          data = {
+              "generated_at": datetime.now(timezone.utc).isoformat(),
+              "repos": REPOS,
+              "note": "Individual results captured per job; summary requires gh CLI"
+          }
+          with open("_scratchpad/test-results.json", "w") as f:
+              json.dump(data, f, indent=2)
+          print("test-results.json written")
+          PYEOF
+
+      - name: Fetch per-job outcomes via gh CLI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Get this workflow run's job statuses
+          RUN_ID="${{ github.run_id }}"
+          gh api "repos/${{ github.repository }}/actions/runs/$RUN_ID/jobs" \
+            --jq '.jobs[] | select(.name | startswith("test (")) | {name, conclusion}' \
+            > /tmp/job_statuses.jsonl || echo "gh api unavailable" > /tmp/job_statuses.jsonl
+
+          python3 - <<'PYEOF'
+          import json, sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          jobs = []
+          try:
+              for line in open("/tmp/job_statuses.jsonl"):
+                  line = line.strip()
+                  if line.startswith("{"):
+                      jobs.append(json.loads(line))
+          except Exception:
+              pass
+
+          results = {}
+          for job in jobs:
+              # name format: "test (kr-beneish)"
+              name = job.get("name", "")
+              if "(" in name:
+                  repo = name.split("(")[1].rstrip(")")
+                  conclusion = job.get("conclusion", "unknown")
+                  results[repo] = "PASS" if conclusion == "success" else "FAIL"
+
+          passed = sum(1 for v in results.values() if v == "PASS")
+          failed = sum(1 for v in results.values() if v == "FAIL")
+
+          data = {
+              "generated_at": datetime.now(timezone.utc).isoformat(),
+              "summary": {"passed": passed, "failed": failed, "total": passed + failed},
+              "results": results
+          }
+          Path("_scratchpad/test-results.json").write_text(json.dumps(data, indent=2))
+          print(f"Test summary: {passed} passed, {failed} failed")
+          if failed:
+              print("FAILED repos:", [r for r, v in results.items() if v == "FAIL"])
+          PYEOF
+
+      - name: Upload scratchpad artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scratchpad-tests
+          path: _scratchpad/test-results.json
+          retention-days: 90
+
+      - name: Create issue if failures
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, subprocess, sys
+          from pathlib import Path
+
+          data = json.loads(Path("_scratchpad/test-results.json").read_text())
+          failed = [r for r, v in data.get("results", {}).items() if v == "FAIL"]
+          if not failed:
+              print("All tests passed — no issue needed")
+              sys.exit(0)
+
+          body = f"""## Test Failures Detected
+
+          **Run:** {{"${{ github.run_id }}"}}
+          **Date:** {data['generated_at']}
+
+          ### Failed repos
+          """ + "\n".join(f"- `{r}`" for r in failed) + """
+
+          ### Next step
+          Run `bash ecosystem.sh test <repo>` locally to reproduce, or check the workflow logs.
+
+          Labels: `agent-task`, `priority:p0`
+          """
+          result = subprocess.run([
+              "gh", "issue", "create",
+              "--title", f"[agent] Test failures: {', '.join(failed)}",
+              "--body", body,
+              "--label", "agent-task",
+          ], capture_output=True, text=True)
+          if result.returncode == 0:
+              print("Issue created:", result.stdout.strip())
+          else:
+              print("Issue creation skipped (may already exist):", result.stderr.strip())
+          PYEOF

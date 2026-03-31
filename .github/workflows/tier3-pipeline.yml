@@ -1,0 +1,159 @@
+name: "Tier 3 — Pipeline Runner"
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"   # Monday 12:00 KST weekly
+  workflow_dispatch:
+
+# Human approval gate (Task 10): environment 'production' requires manual review
+# Set up at: Settings > Environments > production > Required reviewers: pon00050
+
+jobs:
+  approve:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Gate approved
+        run: echo "Pipeline run approved by human reviewer"
+
+  pipeline:
+    runs-on: ubuntu-latest
+    needs: approve
+    timeout-minutes: 60
+    steps:
+      - name: Checkout hub
+        uses: actions/checkout@v4
+
+      - name: Checkout krff-shell
+        uses: actions/checkout@v4
+        with:
+          repository: pon00050/krff-shell
+          path: _deps/krff-shell
+
+      - name: Checkout kr-dart-pipeline
+        uses: actions/checkout@v4
+        with:
+          repository: pon00050/kr-dart-pipeline
+          path: _deps/kr-dart-pipeline
+
+      - name: Checkout kr-forensic-core (dependency)
+        uses: actions/checkout@v4
+        with:
+          repository: pon00050/kr-forensic-core
+          path: _deps/kr-forensic-core
+
+      - name: Checkout kr-company-registry (dependency)
+        uses: actions/checkout@v4
+        with:
+          repository: pon00050/kr-company-registry
+          path: _deps/kr-company-registry
+
+      - name: Checkout kr-trading-calendar (dependency)
+        uses: actions/checkout@v4
+        with:
+          repository: pon00050/kr-trading-calendar
+          path: _deps/kr-trading-calendar
+
+      - name: Symlink repos
+        run: bash scripts/ci/checkout-ecosystem.sh
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        working-directory: _deps/krff-shell
+        run: uv sync 2>/dev/null || true
+
+      - name: Set up Python + claude
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install claude-agent-sdk and data deps
+        run: pip install claude-agent-sdk pandas pyarrow
+
+      - name: Run pipeline agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DART_API_KEY: ${{ secrets.DART_API_KEY }}
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: |
+          mkdir -p _scratchpad
+          python3 - <<'PYEOF'
+          import asyncio, json, os, sys
+          from pathlib import Path
+          sys.path.insert(0, "scripts/agents")
+          from _sdk_helpers import load_context, write_scratchpad, run_agent
+
+          workspace = os.environ.get("GITHUB_WORKSPACE", ".")
+          parent = str(Path(workspace).parent)
+          static_context = load_context()
+
+          PIPELINE_PROMPT = f"""
+          You are a pipeline execution agent running in the krff-shell repo.
+
+          Working context:
+          - krff-shell path: {parent}/krff-shell
+          - kr-dart-pipeline path: {parent}/kr-dart-pipeline
+          - Hub path: {workspace}
+
+          IMPORTANT: pykrx is geo-blocked on cloud IPs. Use --sample mode or
+          FinanceDataReader as the price data source.
+
+          Steps to execute:
+          1. Read {parent}/krff-shell/CLAUDE.md for current conventions and pipeline entry points
+          2. Check data freshness: list .parquet files in {parent}/krff-shell/01_Data/processed/
+          3. Run pipeline in sample mode (safe for CI):
+             cd {parent}/krff-shell && uv run python cli.py run --sample 20 2>/dev/null || \\
+             uv run python cli.py run --stage dart 2>/dev/null || \\
+             echo "CLI unavailable — check CLAUDE.md for current pipeline invocation"
+          4. Validate: for each .parquet in 01_Data/processed/, confirm rows > 0
+          5. Report JSON to _scratchpad/pipeline.json:
+             {{"status":"ok|error","stages_completed":[],"parquet_counts":{{}},"errors":[]}}
+
+          Rules:
+          - If any stage fails, continue to validation and include error in report.
+          - Do NOT push to git.
+          - Do NOT modify source files.
+          - Use 'uv run' for all Python commands.
+          - If pipeline architecture has changed (CLAUDE.md differs from this prompt),
+            follow CLAUDE.md — it is authoritative.
+          """
+
+          async def main():
+              from claude_agent_sdk import ClaudeAgentOptions
+              options = ClaudeAgentOptions(
+                  system_prompt=static_context + "\\n\\nYou are a pipeline execution agent.",
+                  allowed_tools=["Bash", "Read", "Glob"],
+                  permission_mode="bypassPermissions",
+                  max_turns=40,
+                  max_budget_usd=5.00,
+                  model="claude-sonnet-4-6",
+                  cwd=f"{parent}/krff-shell",
+              )
+              await run_agent(PIPELINE_PROMPT, options,
+                              escalation_context="Pipeline execution failed on GitHub Actions runner")
+
+          asyncio.run(main())
+          PYEOF
+
+      - name: Upload parquets as artifacts (Principle #10 — file-based IPC)
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-parquets
+          path: _deps/krff-shell/01_Data/processed/*.parquet
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Upload pipeline scratchpad
+        uses: actions/upload-artifact@v4
+        with:
+          name: scratchpad-pipeline
+          path: _scratchpad/pipeline.json
+          retention-days: 90
+          if-no-files-found: ignore
+
+      # Principle #11: Implementation → Verification
+      # Trigger data validation after pipeline completes
+      # (tier2-data-validate listens on workflow_run trigger)

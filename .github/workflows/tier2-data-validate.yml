@@ -1,0 +1,100 @@
+name: "Tier 2 — Data Validator (Haiku)"
+
+on:
+  workflow_run:
+    workflows: ["Tier 3 — Pipeline Runner"]
+    types: [completed]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout hub
+        uses: actions/checkout@v4
+
+      - name: Checkout krff-shell (pipeline outputs)
+        uses: actions/checkout@v4
+        with:
+          repository: pon00050/krff-shell
+          path: _deps/krff-shell
+
+      - name: Symlink repos
+        run: bash scripts/ci/checkout-ecosystem.sh
+
+      - name: Download pipeline artifacts (parquets from tier3-pipeline)
+        uses: actions/download-artifact@v4
+        with:
+          name: pipeline-parquets
+          path: _deps/krff-shell/01_Data/processed/
+        continue-on-error: true   # Parquets may not exist on non-pipeline days
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install pandas pyarrow claude-agent-sdk
+
+      - name: Run data validation agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: python scripts/agents/data_validate_agent.py
+
+      - name: Upload scratchpad artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scratchpad-data-validation
+          path: _scratchpad/data-validation.json
+          retention-days: 90
+
+      - name: Create issue if validation failed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, subprocess, sys
+          from pathlib import Path
+
+          path = Path("_scratchpad/data-validation.json")
+          if not path.exists():
+              print("No validation output — skipping")
+              sys.exit(0)
+
+          data = json.loads(path.read_text())
+          status = data.get("overall_status", "UNKNOWN")
+
+          if status == "PASS":
+              print(f"All validations passed — no issue needed")
+              sys.exit(0)
+
+          files = data.get("files", {})
+          failed = {k: v for k, v in files.items() if v.get("status") != "PASS"}
+
+          detail = "\n".join(
+              f"- `{fname}`: {info.get('status','?')} — {info.get('summary', '')}"
+              for fname, info in failed.items()
+          )
+
+          body = f"""## Pipeline Data Validation: {status}
+
+          {data.get('summary', 'See details below.')}
+
+          ### Failed files
+          {detail}
+
+          ### Action required
+          Review pipeline logs from `tier3-pipeline` workflow.
+          Check `_scratchpad/data-validation.json` for detailed check results.
+          """
+          result = subprocess.run([
+              "gh", "issue", "create",
+              "--title", f"[agent] Data validation {status}: pipeline outputs need review",
+              "--body", body,
+              "--label", "agent-task",
+          ], capture_output=True, text=True)
+          print("Issue:", result.stdout.strip() or result.stderr.strip())
+          PYEOF
