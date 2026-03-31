@@ -92,6 +92,77 @@ jobs:
               --label "needs-human,priority:p0" || true
           fi
 
+      - name: Dispatch agent-fix for AI-actionable P0/P1 items
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, subprocess, sys
+          from pathlib import Path
+
+          path = Path("_scratchpad/orchestrator.json")
+          if not path.exists():
+              print("No orchestrator.json — skipping dispatch")
+              sys.exit(0)
+
+          data = json.loads(path.read_text())
+          briefs = data.get("action_briefs", [])
+          repo_api = "${{ github.repository }}"
+
+          # Dispatch for AI-actionable P0/P1 that aren't TEST_FAIL
+          # (TEST_FAIL is dispatched by tier1-tests already)
+          dispatchable_categories = {"CONVENTION_DRIFT", "STUB", "DOC_DRIFT", "COUNT_DRIFT"}
+          to_dispatch = [
+              b for b in briefs
+              if b.get("ai_actionable")
+              and b.get("priority") in ("P0", "P1")
+              and b.get("category") in dispatchable_categories
+          ]
+
+          dispatched = 0
+          for brief in to_dispatch[:5]:  # cap at 5 per run to avoid runaway costs
+              repo = brief.get("repo", "")
+              if not repo:
+                  continue
+
+              # Skip if open autofix PR already exists for this repo
+              open_prs = subprocess.run([
+                  "gh", "pr", "list", "--repo", f"pon00050/{repo}",
+                  "--state", "open", "--json", "headRefName",
+                  "--jq", '[.[] | select(.headRefName | startswith("autofix/"))] | length',
+              ], capture_output=True, text=True).stdout.strip()
+              if open_prs and open_prs != "0":
+                  print(f"  Skipping {repo} [{brief.get('category')}] — autofix PR in flight")
+                  continue
+
+              payload = {
+                  "event_type": "agent-fix",
+                  "client_payload": {
+                      "priority": brief.get("priority"),
+                      "category": brief.get("category"),
+                      "repo": repo,
+                      "description": brief.get("change", ""),
+                      "file": brief.get("file"),
+                      "line": brief.get("line"),
+                      "command": brief.get("command"),
+                      "ai_actionable": True,
+                      "brief_id": brief.get("id", ""),
+                  }
+              }
+              r = subprocess.run(
+                  ["gh", "api", f"repos/{repo_api}/dispatches",
+                   "--method", "POST", "--input", "-"],
+                  input=json.dumps(payload), text=True, capture_output=True,
+              )
+              if r.returncode == 0:
+                  print(f"  Dispatched agent-fix: {repo} [{brief.get('category')}]")
+                  dispatched += 1
+              else:
+                  print(f"  Dispatch failed: {r.stderr.strip()[:100]}")
+
+          print(f"Dispatched {dispatched} agent-fix event(s) from orchestrator")
+          PYEOF
+
       - name: Post orchestrator summary issue
         env:
           GH_TOKEN: ${{ github.token }}

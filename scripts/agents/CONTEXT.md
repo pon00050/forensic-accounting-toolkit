@@ -24,7 +24,7 @@ and symlinked to `$parent/<repo>` so that relative paths like `../kr-beneish` wo
 |------|---------|-------|
 | kr-company-registry | DART↔KRX↔BRN↔CRN identifier crosswalk (3,949 companies) | 18 |
 | kr-trading-calendar | KRX trading-day math (holidays, offsets, ranges) | 13 |
-| kr-beneish | Beneish M-Score for Korean IFRS companies | 61 |
+| kr-beneish | Beneish M-Score for Korean IFRS companies | 70 |
 | jfia-catalog | 469 JFIA forensic accounting articles (structured JSON) | 8 |
 
 ### Analysis Libraries (consume data files, not code)

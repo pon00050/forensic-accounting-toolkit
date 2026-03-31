@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""Auto-fix stale kr-forensic-finance references in hub files.
+"""Auto-fix stale kr-forensic-finance references.
 
 Reads _scratchpad/doc-drift.json (produced by doc-drift-scan.sh).
-Applies text replacement for findings whose file path is inside the hub
-workspace root. Sibling repo findings are reported but not touched — they
-require per-repo write access that the default GITHUB_TOKEN doesn't cover.
+
+Hub files (inside $GITHUB_WORKSPACE): fixed directly and written.
+Sibling repo files: written to _scratchpad/sibling-drift.json for the
+workflow's PAT-based push step to handle.
 
 Exit codes:
   0 — one or more hub files fixed and written
   1 — input file missing or unreadable
-  2 — no fixable findings (zero findings, or all in sibling repos)
+  2 — no fixable hub findings (zero count, or all in sibling repos)
 """
 
 from __future__ import annotations
@@ -30,30 +31,40 @@ if not drift_path.exists():
 data = json.loads(drift_path.read_text(encoding="utf-8"))
 findings = data.get("findings", [])
 
+# Always write sibling-drift.json so the bash step can pick it up
+sibling_by_repo: dict[str, list[str]] = defaultdict(list)
+hub_findings: list[dict] = []
+
+for f in findings:
+    filepath = Path(f["file"])
+    try:
+        filepath.resolve().relative_to(workspace)
+        hub_findings.append(f)
+    except ValueError:
+        sibling_by_repo[f.get("repo", "unknown")].append(f["file"])
+
+sibling_output = {
+    "repo_count": len(sibling_by_repo),
+    "repos": {repo: sorted(set(files)) for repo, files in sibling_by_repo.items()},
+}
+(workspace / "_scratchpad" / "sibling-drift.json").write_text(
+    json.dumps(sibling_output, indent=2), encoding="utf-8"
+)
+
+if sibling_by_repo:
+    repos = sorted(sibling_by_repo)
+    print(f"Note: {sum(len(v) for v in sibling_by_repo.values())} sibling finding(s) "
+          f"in {repos} written to sibling-drift.json for PAT-based push step.")
+
 if not findings:
     print("No drift findings — nothing to fix.")
     sys.exit(2)
 
-# Split into hub-local vs sibling
-hub_findings: list[dict] = []
-sibling_findings: list[dict] = []
-for f in findings:
-    filepath = Path(f["file"]).resolve()
-    try:
-        filepath.relative_to(workspace)
-        hub_findings.append(f)
-    except ValueError:
-        sibling_findings.append(f)
-
-if sibling_findings:
-    repos = {f.get("repo", "?") for f in sibling_findings}
-    print(f"Note: {len(sibling_findings)} finding(s) in sibling repos ({', '.join(sorted(repos))}) — require per-repo PAT to auto-fix.")
-
 if not hub_findings:
-    print("No hub-local findings — skipping autofix.")
+    print("No hub-local findings — skipping hub autofix.")
     sys.exit(2)
 
-# Group by file path and apply replacement
+# Group hub findings by file path
 by_file: dict[str, list] = defaultdict(list)
 for f in hub_findings:
     by_file[f["file"]].append(f)
@@ -71,7 +82,7 @@ for filepath_str in by_file:
         fixed_files.append(str(p))
         print(f"  Fixed: {p}")
     else:
-        print(f"  SKIP (no plain text match, may be in excluded context): {p}")
+        print(f"  SKIP (no plain-text match): {p}")
 
 if not fixed_files:
     print("No hub files changed.")

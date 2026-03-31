@@ -1,0 +1,236 @@
+name: "Tier 4 — Agent Fix Worker"
+
+# Triggered by other workflows via repository_dispatch when a P0/P1 issue
+# is AI-actionable and no existing open fix PR is in-flight for that repo.
+# Also supports manual trigger for ad-hoc fix runs.
+
+on:
+  repository_dispatch:
+    types: [agent-fix]
+  workflow_dispatch:
+    inputs:
+      fix_brief:
+        description: 'JSON fix brief e.g. {"priority":"P0","category":"TEST_FAIL","repo":"kr-beneish","description":"..."}'
+        required: true
+        default: '{}'
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout hub
+        uses: actions/checkout@v4
+
+      - name: Write fix brief to scratchpad
+        run: |
+          mkdir -p _scratchpad
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            python3 -c "
+          import json, sys
+          payload = ${{ toJSON(github.event.client_payload) }}
+          with open('_scratchpad/fix-brief.json', 'w') as f:
+              json.dump(payload, f, indent=2)
+          print('Fix brief:', json.dumps(payload, indent=2))
+          "
+          else:
+            echo '${{ github.event.inputs.fix_brief }}' > _scratchpad/fix-brief.json
+          fi
+
+      - name: Parse target repo and check for in-flight PRs
+        id: parse
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          REPO=$(python3 -c "
+          import json
+          d = json.load(open('_scratchpad/fix-brief.json'))
+          print(d.get('repo', ''))
+          ")
+          echo "target_repo=$REPO" >> $GITHUB_OUTPUT
+
+          # Skip if an autofix PR is already open for this repo
+          OPEN_PRS=$(gh pr list --repo "pon00050/$REPO" --state open \
+            --json headRefName --jq '[.[] | select(.headRefName | startswith("autofix/"))] | length' \
+            2>/dev/null || echo "0")
+          echo "open_fix_prs=$OPEN_PRS" >> $GITHUB_OUTPUT
+          echo "Target repo: $REPO | Open autofix PRs: $OPEN_PRS"
+
+      - name: Skip if fix PR already in flight
+        if: steps.parse.outputs.open_fix_prs != '0'
+        run: |
+          echo "An autofix PR already exists for ${{ steps.parse.outputs.target_repo }} — skipping."
+          exit 0
+
+      - name: Checkout target repo
+        if: steps.parse.outputs.target_repo != '' && steps.parse.outputs.open_fix_prs == '0'
+        uses: actions/checkout@v4
+        with:
+          repository: pon00050/${{ steps.parse.outputs.target_repo }}
+          path: _target_repo
+          # ECOSYSTEM_PAT needed to push fix branches to sibling repos.
+          # Falls back to GITHUB_TOKEN (read-only for sibling repos) if PAT not configured.
+          token: ${{ secrets.ECOSYSTEM_PAT != '' && secrets.ECOSYSTEM_PAT || github.token }}
+
+      - name: Set up Python
+        if: steps.parse.outputs.open_fix_prs == '0'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v7
+        if: steps.parse.outputs.open_fix_prs == '0'
+        with:
+          enable-cache: true
+
+      - name: Install target repo deps
+        if: steps.parse.outputs.target_repo != '' && steps.parse.outputs.open_fix_prs == '0'
+        run: |
+          cd _target_repo
+          uv sync --extra dev 2>/dev/null || uv sync 2>/dev/null || pip install pytest 2>/dev/null || true
+
+      - name: Install claude-agent-sdk
+        if: steps.parse.outputs.open_fix_prs == '0'
+        run: pip install claude-agent-sdk
+
+      - name: Run fix agent (Sonnet)
+        if: steps.parse.outputs.open_fix_prs == '0'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: python scripts/agents/fix_agent.py
+
+      - name: Create PR if agent fixed the issue
+        if: always() && steps.parse.outputs.open_fix_prs == '0'
+        env:
+          # Use ECOSYSTEM_PAT to push to sibling repos; fall back to hub token
+          GH_TOKEN: ${{ secrets.ECOSYSTEM_PAT != '' && secrets.ECOSYSTEM_PAT || github.token }}
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, os, subprocess, sys
+          from pathlib import Path
+
+          workspace = Path(os.environ["GITHUB_WORKSPACE"])
+          result_path = workspace / "_scratchpad" / "fix-result.json"
+          if not result_path.exists():
+              print("No fix-result.json — agent did not complete")
+              sys.exit(0)
+
+          result = json.loads(result_path.read_text(encoding="utf-8"))
+          status = result.get("status")
+          repo = result.get("repo", "")
+          summary = result.get("summary", "No summary.")
+          changed = result.get("changed_files", [])
+
+          if status != "fixed" or not changed:
+              print(f"Status={status} — no PR to create")
+              if status == "needs_human":
+                  # Comment on originating issue if we have an issue_number
+                  brief_path = workspace / "_scratchpad" / "fix-brief.json"
+                  brief = json.loads(brief_path.read_text()) if brief_path.exists() else {}
+                  issue_num = brief.get("issue_number")
+                  if issue_num:
+                      subprocess.run([
+                          "gh", "issue", "comment", str(issue_num),
+                          "--body",
+                          f"Fix agent could not auto-resolve (status=needs_human):\n\n{summary}\n\n"
+                          f"Manual investigation required.",
+                      ], check=False)
+              sys.exit(0)
+
+          target = workspace / "_target_repo"
+          run_id = os.environ.get("GITHUB_RUN_ID", "0")
+          branch = f"autofix/{repo}-{run_id}"
+          pat = os.environ.get("GH_TOKEN", "")
+
+          try:
+              for cmd in [
+                  ["git", "-C", str(target), "config", "user.name", "github-actions[bot]"],
+                  ["git", "-C", str(target), "config", "user.email",
+                   "github-actions[bot]@users.noreply.github.com"],
+                  ["git", "-C", str(target), "checkout", "-b", branch],
+                  ["git", "-C", str(target), "add", "-A"],
+              ]:
+                  subprocess.run(cmd, check=True)
+
+              staged = subprocess.run(
+                  ["git", "-C", str(target), "diff", "--cached", "--quiet"],
+                  capture_output=True,
+              )
+              if staged.returncode == 0:
+                  print("No staged changes — nothing to commit")
+                  sys.exit(0)
+
+              subprocess.run(
+                  ["git", "-C", str(target), "commit", "-m", f"fix: {summary}"],
+                  check=True,
+              )
+              subprocess.run(
+                  ["git", "-C", str(target), "remote", "set-url", "origin",
+                   f"https://x-access-token:{pat}@github.com/pon00050/{repo}"],
+                  check=True,
+              )
+              subprocess.run(
+                  ["git", "-C", str(target), "push", "origin", branch],
+                  check=True,
+              )
+          except subprocess.CalledProcessError as e:
+              print(f"Git/push failed: {e}")
+              print("ECOSYSTEM_PAT may not be configured — cannot push to sibling repo.")
+              sys.exit(0)
+
+          # Create PR
+          changed_list = "\n".join(f"- `{f}`" for f in changed)
+          test_out = result.get("test_output", "")[-600:]
+          pr_body = f"""## Auto-fix by Tier 4 Agent
+
+{summary}
+
+**Changed files:**
+{changed_list}
+
+**Test output (passing):**
+```
+{test_out}
+```
+
+---
+🤖 Auto-generated by [Tier 4 — Agent Fix Worker]({os.environ.get('GITHUB_SERVER_URL','https://github.com')}/{os.environ.get('GITHUB_REPOSITORY','')}/actions/runs/{os.environ.get('GITHUB_RUN_ID','0')})
+"""
+          pr = subprocess.run([
+              "gh", "pr", "create",
+              "--repo", f"pon00050/{repo}",
+              "--title", f"fix({repo}): {summary[:72]}",
+              "--body", pr_body,
+              "--base", "master",
+              "--head", branch,
+          ], capture_output=True, text=True)
+          pr_url = pr.stdout.strip() or pr.stderr.strip()
+          print(f"PR: {pr_url}")
+
+          # Comment on originating issue
+          brief_path = workspace / "_scratchpad" / "fix-brief.json"
+          brief = json.loads(brief_path.read_text()) if brief_path.exists() else {}
+          issue_num = brief.get("issue_number")
+          if issue_num:
+              subprocess.run([
+                  "gh", "issue", "comment", str(issue_num),
+                  "--body", f"Auto-fix PR created: {pr_url}",
+              ], check=False)
+          PYEOF
+
+      - name: Upload scratchpad
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scratchpad-fix-${{ github.run_id }}
+          path: _scratchpad/
+          retention-days: 30
+          if-no-files-found: ignore

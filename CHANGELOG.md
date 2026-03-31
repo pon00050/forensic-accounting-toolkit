@@ -4,6 +4,28 @@ Audit trail for ecosystem-wide changes coordinated from this hub.
 
 ---
 
+## 2026-03-31 — Full autonomous fix loop: dispatch + Sonnet fix worker + sibling PAT support
+
+Closed all remaining gaps in the detect → fix → PR pipeline.
+
+**`scripts/agents/fix_agent.py`** (NEW) — Sonnet agent dispatched by tier4 to fix code issues. Reads fix-brief.json, diagnoses the failure, makes a targeted code edit, runs tests to verify, writes fix-result.json. Hard rules: never modify tests, never touch data/raw/, write needs_human if env-dependent.
+
+**`.github/workflows/tier4-autofix.yml`** (NEW) — Fix worker workflow triggered by `repository_dispatch: agent-fix`. Checks for in-flight PRs (deduplication), checks out target repo, runs fix_agent.py, commits changed files to `autofix/<repo>-<run_id>` branch, creates PR in sibling repo (requires ECOSYSTEM_PAT), comments on originating issue. Gracefully degrades if PAT not configured.
+
+**`tier1-tests.yml`** — Added "Dispatch agent-fix for failed repos" step in summary job. Dispatches to tier4 for each failing repo; skips if open agent-task issue already exists (deduplication).
+
+**`orchestrator.yml`** — Added "Dispatch agent-fix for AI-actionable P0/P1 items" step. Dispatches for categories CONVENTION_DRIFT, STUB, DOC_DRIFT, COUNT_DRIFT (not TEST_FAIL — already handled by tier1-tests). Caps at 5 events/run; skips repos with open autofix PRs.
+
+**`tier1-doc-drift.yml`** — Added "Fix sibling repo drift via ECOSYSTEM_PAT" step. When ECOSYSTEM_PAT secret is set, reads sibling-drift.json, applies text replacement in each sibling repo, commits and pushes `[skip ci]`.
+
+**`autofix-doc-drift.py`** — Updated to always write sibling-drift.json (list of repos + files) so the bash step knows what to process.
+
+**`scripts/agents/CONTEXT.md`** — Fixed kr-beneish test count: 61 → 70.
+
+**Required secret:** `ECOSYSTEM_PAT` — classic PAT with `repo` scope for all ecosystem repos. Needed for: tier4 PR creation in sibling repos, sibling doc-drift push. Without it, these steps skip gracefully; hub-only fixes still apply.
+
+---
+
 ## 2026-03-31 — Autonomous autofix loop (count-sync + doc-drift)
 
 Closed the detect → create-issue gap with deterministic fix workers embedded directly in tier1 workflows. No LLM required for these two fix types.

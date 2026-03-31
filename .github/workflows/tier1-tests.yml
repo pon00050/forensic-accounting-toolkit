@@ -271,3 +271,55 @@ jobs:
           else:
               print("Issue creation skipped (may already exist):", result.stderr.strip())
           PYEOF
+
+      - name: Dispatch agent-fix for failed repos
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, subprocess, sys
+          from pathlib import Path
+
+          data = json.loads(Path("_scratchpad/test-results.json").read_text())
+          failed = [r for r, v in data.get("results", {}).items() if v == "FAIL"]
+          if not failed:
+              print("No failures — no dispatch needed")
+              sys.exit(0)
+
+          repo_api = "${{ github.repository }}"
+          dispatched = 0
+          for repo in failed:
+              # Skip if an open agent-task issue already exists for this repo's tests
+              existing = subprocess.run([
+                  "gh", "issue", "list", "--label", "agent-task", "--state", "open",
+                  "--json", "title",
+                  "--jq", f'.[] | select(.title | contains("{repo}")) | .title',
+              ], capture_output=True, text=True).stdout.strip()
+              if existing:
+                  print(f"  Skipping {repo} — open issue already exists")
+                  continue
+
+              payload = {
+                  "event_type": "agent-fix",
+                  "client_payload": {
+                      "priority": "P0",
+                      "category": "TEST_FAIL",
+                      "repo": repo,
+                      "description": f"Test suite failing in {repo}. Investigate and fix.",
+                      "ai_actionable": True,
+                  }
+              }
+              r = subprocess.run(
+                  ["gh", "api", f"repos/{repo_api}/dispatches",
+                   "--method", "POST", "--input", "-"],
+                  input=json.dumps(payload), text=True, capture_output=True,
+              )
+              if r.returncode == 0:
+                  print(f"  Dispatched agent-fix for {repo}")
+                  dispatched += 1
+              else:
+                  print(f"  Dispatch failed for {repo}: {r.stderr.strip()[:80]}")
+
+          print(f"Dispatched {dispatched} agent-fix event(s)")
+          PYEOF

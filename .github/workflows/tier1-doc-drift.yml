@@ -80,6 +80,95 @@ jobs:
             echo "HUB_AUTOFIX_APPLIED=false" >> $GITHUB_ENV
           fi
 
+      - name: Fix sibling repo drift via ECOSYSTEM_PAT
+        if: env.ECOSYSTEM_PAT != ''
+        env:
+          ECOSYSTEM_PAT: ${{ secrets.ECOSYSTEM_PAT }}
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, os, subprocess, sys
+          from pathlib import Path
+
+          sibling_path = Path("_scratchpad/sibling-drift.json")
+          if not sibling_path.exists():
+              print("No sibling-drift.json — skipping sibling fix")
+              sys.exit(0)
+
+          data = json.loads(sibling_path.read_text())
+          repos = data.get("repos", {})
+          if not repos:
+              print("No sibling repos with drift")
+              sys.exit(0)
+
+          parent = Path(os.environ["GITHUB_WORKSPACE"]).parent
+          pat = os.environ["ECOSYSTEM_PAT"]
+          fixed_repos = []
+
+          for repo, files in repos.items():
+              repo_path = parent / repo
+              if not repo_path.exists():
+                  print(f"  SKIP {repo}: not cloned at {repo_path}")
+                  continue
+
+              changed = False
+              for filepath_str in files:
+                  p = Path(filepath_str)
+                  if not p.exists():
+                      print(f"    SKIP (not found): {filepath_str}")
+                      continue
+                  text = p.read_text(encoding="utf-8", errors="replace")
+                  new_text = text.replace("kr-forensic-finance", "forensic-accounting-toolkit")
+                  if new_text != text:
+                      p.write_text(new_text, encoding="utf-8")
+                      changed = True
+                      print(f"  Fixed: {filepath_str}")
+
+              if not changed:
+                  print(f"  No changes needed in {repo}")
+                  continue
+
+              try:
+                  subprocess.run(["git", "-C", str(repo_path), "config", "user.name",
+                                  "github-actions[bot]"], check=True)
+                  subprocess.run(["git", "-C", str(repo_path), "config", "user.email",
+                                  "github-actions[bot]@users.noreply.github.com"], check=True)
+                  subprocess.run(["git", "-C", str(repo_path), "remote", "set-url", "origin",
+                                  f"https://x-access-token:{pat}@github.com/pon00050/{repo}"],
+                                 check=True)
+                  subprocess.run(["git", "-C", str(repo_path), "add", "-u"], check=True)
+                  staged = subprocess.run(
+                      ["git", "-C", str(repo_path), "diff", "--cached", "--quiet"],
+                      capture_output=True,
+                  )
+                  if staged.returncode != 0:
+                      subprocess.run(
+                          ["git", "-C", str(repo_path), "commit", "-m",
+                           "fix: replace stale kr-forensic-finance refs [skip ci]"],
+                          check=True,
+                      )
+                      subprocess.run(
+                          ["git", "-C", str(repo_path), "push", "origin", "HEAD"],
+                          check=True,
+                      )
+                      fixed_repos.append(repo)
+                      print(f"  Pushed fix for {repo}")
+              except subprocess.CalledProcessError as e:
+                  print(f"  ERROR pushing to {repo}: {e}")
+
+          print(f"Sibling fix: pushed to {len(fixed_repos)} repo(s): {fixed_repos}")
+          if fixed_repos:
+              os.environ["SIBLING_AUTOFIX_APPLIED"] = "true"
+          PYEOF
+          # Export env var for subsequent steps
+          if python3 -c "
+          import json
+          from pathlib import Path
+          d = json.loads(Path('_scratchpad/sibling-drift.json').read_text())
+          " 2>/dev/null; then
+            echo "SIBLING_DRIFT_CHECKED=true" >> $GITHUB_ENV
+          fi
+
       - name: Create or update issue if drift remains
         env:
           GH_TOKEN: ${{ github.token }}
