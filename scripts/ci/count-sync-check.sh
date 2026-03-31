@@ -47,23 +47,23 @@ for repo in "${!TEST_RUNNERS[@]}"; do
     runner="${TEST_RUNNERS[$repo]}"
     cd "$rpath"
     # Root cause of false zeros: uv sync installs all deps but silently fails
-    # the project's own editable install (hatchling build error exits 0 with
-    # --quiet). Fix: explicitly install the project package before collection
-    # so "import kr_derivatives" resolves. uv pip install is idempotent.
-    if [[ "$runner" == uv* ]]; then
-        uv pip install -e . --quiet 2>/dev/null || true
+    # the project's own editable install. Fix: use .venv/bin/pip directly so
+    # we bypass uv's VIRTUAL_ENV detection (uv pip install requires VIRTUAL_ENV
+    # to be set; without it uv targets the wrong environment).
+    if [[ "$runner" == uv* ]] && [ -d ".venv" ]; then
+        .venv/bin/pip install -e . --quiet 2>/dev/null || true
     fi
     # Capture both stdout and stderr — 2>/dev/null was hiding real collection
-    # errors. The grep below only matches the "N tests collected" line, so
-    # stderr noise does not corrupt the count; it just becomes visible.
+    # errors. The grep below only matches "N tests collected" so stderr noise
+    # does not corrupt the count; it just becomes visible in the workflow log.
     count_output=$(eval "$runner tests/ --co -q 2>&1" || true)
     # Parse the "N tests collected" line from anywhere in the output.
     actual=$(echo "$count_output" | grep -oP '^\d+(?= tests? collected)' | tail -1 || true)
     if [ -z "$actual" ] || [ "$actual" = "0" ]; then
         # Treat as collection failure, not a genuine zero-test count.
-        # Log the tail of collection output so the workflow log shows why.
-        echo "  [count-sync] COLLECTION FAILED for $repo — last output lines:"
-        echo "$count_output" | tail -6 | sed 's/^/    /'
+        # Log the FIRST lines (where ImportError appears) so we can diagnose.
+        echo "  [count-sync] COLLECTION FAILED for $repo — first error lines:"
+        echo "$count_output" | grep -E "Error|error|FAILED|import" | head -4 | sed 's/^/    /'
         COLLECTION_FAILED[$repo]=1
         actual=0
     fi
