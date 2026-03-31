@@ -226,5 +226,76 @@ jobs:
               "--body", body,
               "--label", "agent:orchestrator",
           ], capture_output=True, text=True)
-          print("Summary issue:", result.stdout.strip() or result.stderr.strip())
+          issue_url = result.stdout.strip() or result.stderr.strip()
+          print("Summary issue:", issue_url)
+
+          # Write issue URL for Telegram step
+          Path("_scratchpad/issue_url.txt").write_text(issue_url)
+          Path("_scratchpad/health_summary.json").write_text(json.dumps({
+              "health": health,
+              "p0p1_count": len(p0p1),
+              "p2p3_count": len(p2p3),
+              "needs_human_count": len(needs_human),
+              "issue_url": issue_url,
+              "date": date,
+          }))
+          PYEOF
+
+      - name: Telegram notification
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          # Skip gracefully if secrets not configured
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "Telegram secrets not configured — skipping notification"
+            exit 0
+          fi
+
+          python3 - <<'PYEOF'
+          import json, os, urllib.request, urllib.parse
+          from pathlib import Path
+
+          token = os.environ["TELEGRAM_BOT_TOKEN"]
+          chat_id = os.environ["TELEGRAM_CHAT_ID"]
+
+          summary_path = Path("_scratchpad/health_summary.json")
+          if summary_path.exists():
+              s = json.loads(summary_path.read_text())
+              health = s.get("health", "?")
+              p0p1 = s.get("p0p1_count", 0)
+              p2p3 = s.get("p2p3_count", 0)
+              needs_human = s.get("needs_human_count", 0)
+              issue_url = s.get("issue_url", "")
+              date = s.get("date", "")
+              # Health emoji
+              score = float(health) if str(health).replace('.','').isdigit() else 0
+              emoji = "✅" if score >= 8 else "⚠️" if score >= 5 else "🚨"
+              text = (
+                  f"{emoji} *Forensic Toolkit — {date}*\n"
+                  f"Health: {health}/10\n"
+                  f"P0/P1 issues: {p0p1} | P2/P3: {p2p3}\n"
+                  f"Needs human: {needs_human}\n"
+              )
+              if issue_url:
+                  text += f"[Full report]({issue_url})"
+          else:
+              text = "⚠️ Orchestrator ran but produced no summary."
+
+          data = urllib.parse.urlencode({
+              "chat_id": chat_id,
+              "text": text,
+              "parse_mode": "Markdown",
+              "disable_web_page_preview": "true",
+          }).encode()
+          req = urllib.request.Request(
+              f"https://api.telegram.org/bot{token}/sendMessage",
+              data=data,
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=10) as resp:
+                  print("Telegram sent:", resp.status)
+          except Exception as e:
+              print(f"Telegram failed (non-critical): {e}")
           PYEOF

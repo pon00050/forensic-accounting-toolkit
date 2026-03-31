@@ -215,9 +215,23 @@ jobs:
           pr_url = pr.stdout.strip() or pr.stderr.strip()
           print(f"PR: {pr_url}")
 
-          # Comment on originating issue
+          # Auto-merge low-risk categories (doc drift, count sync) — no logic change
           brief_path = workspace / "_scratchpad" / "fix-brief.json"
           brief = json.loads(brief_path.read_text()) if brief_path.exists() else {}
+          category = brief.get("category", "")
+          LOW_RISK = {"DOC_DRIFT", "COUNT_DRIFT"}
+          if category in LOW_RISK and pr_url.startswith("https://"):
+              merge = subprocess.run([
+                  "gh", "pr", "merge", pr_url,
+                  "--squash", "--auto",
+                  "--repo", f"pon00050/{repo}",
+              ], capture_output=True, text=True)
+              if merge.returncode == 0:
+                  print(f"Auto-merge enabled for {category} PR")
+              else:
+                  print(f"Auto-merge skipped (branch protection may not be set): {merge.stderr.strip()[:100]}")
+
+          # Comment on originating issue
           issue_num = brief.get("issue_number")
           if issue_num:
               subprocess.run([

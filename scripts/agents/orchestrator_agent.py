@@ -197,22 +197,33 @@ async def main() -> None:
     from _sdk_helpers import collect_text
     text = collect_text(messages)
 
-    # Extract JSON
-    import re
-    result = None
-    for pat in [r"```json\s*(\{.*?\})\s*```", r"```\s*(\{.*?\})\s*```"]:
-        m = re.search(pat, text, re.DOTALL)
-        if m:
-            try:
-                result = json.loads(m.group(1))
-                break
-            except json.JSONDecodeError:
-                pass
-    if result is None:
+    # Prefer orchestrator.json if agent wrote it directly via Write tool
+    agent_written = scratchpad / "orchestrator.json"
+    if agent_written.exists():
         try:
-            result = json.loads(text.strip())
+            result = json.loads(agent_written.read_text(encoding="utf-8"))
+            print("[orchestrator] using agent-written orchestrator.json", file=sys.stderr)
         except json.JSONDecodeError:
-            result = {"raw_output": text, "error": "output not structured JSON", "action_briefs": []}
+            result = None
+    else:
+        result = None
+
+    # Fall back: extract JSON block from agent text output
+    if result is None:
+        import re
+        for pat in [r"```json\s*(\{.*?\})\s*```", r"```\s*(\{.*?\})\s*```"]:
+            m = re.search(pat, text, re.DOTALL)
+            if m:
+                try:
+                    result = json.loads(m.group(1))
+                    break
+                except json.JSONDecodeError:
+                    pass
+        if result is None:
+            try:
+                result = json.loads(text.strip())
+            except json.JSONDecodeError:
+                result = {"raw_output": text[:2000], "error": "output not structured JSON", "action_briefs": []}
 
     write_scratchpad("orchestrator.json", result)
 
