@@ -109,7 +109,7 @@ async def main() -> None:
     # Read triage scan raw output
     scan_raw_path = Path(os.environ.get("GITHUB_WORKSPACE", ".")) / "_scratchpad" / "triage-scan-raw.txt"
     if scan_raw_path.exists():
-        scan_output = scan_raw_path.read_text(encoding="utf-8")
+        scan_output = scan_raw_path.read_text(encoding="utf-8", errors="replace")
     else:
         scan_output = os.environ.get("TRIAGE_SCAN_OUTPUT", "")
 
