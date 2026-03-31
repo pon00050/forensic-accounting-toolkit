@@ -68,6 +68,7 @@ jobs:
           path: |
             _scratchpad/triage.json
             _scratchpad/triage-scan-raw.txt
+            _scratchpad/task-notifications.jsonl
           retention-days: 90
 
       - name: Post daily triage issue
