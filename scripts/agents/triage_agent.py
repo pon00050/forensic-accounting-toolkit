@@ -66,7 +66,10 @@ Sources scanned:
 Read the triage scan output from the TRIAGE_SCAN_OUTPUT variable in the environment,
 or from _scratchpad/triage-scan-raw.txt if present.
 
-Write to _scratchpad/triage.json with this schema:
+Your FINAL response MUST end with a JSON code block in exactly this format.
+No prose after the JSON block. The issue display depends entirely on this.
+
+```json
 {
   "generated_at": "<ISO timestamp>",
   "mode": "full",
@@ -92,6 +95,7 @@ Write to _scratchpad/triage.json with this schema:
   ],
   "recommended_next": "<single command>"
 }
+```
 
 Cap ranked_actions at 8 items. Rank strictly by priority, then impact.
 Always provide recommended_next — the single most valuable next command.
@@ -131,7 +135,7 @@ async def main() -> None:
 
     options = ClaudeAgentOptions(
         system_prompt=static_context + "\n\nYou are the triage analyst for this ecosystem.",
-        allowed_tools=["Read", "Glob"],
+        allowed_tools=["Read", "Glob", "Write"],
         permission_mode="bypassPermissions",
         max_turns=10,
         max_budget_usd=0.50,

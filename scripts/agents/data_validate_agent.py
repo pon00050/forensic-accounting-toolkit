@@ -60,6 +60,8 @@ print(f"OK: {len(df)} rows, {len(df.columns)} columns, max_null={null_rate:.1%}"
 
 ## Output Schema
 
+Your FINAL response MUST end with a JSON code block. No prose after it.
+
 Write to _scratchpad/data-validation.json:
 {
   "generated_at": "<ISO timestamp>",
