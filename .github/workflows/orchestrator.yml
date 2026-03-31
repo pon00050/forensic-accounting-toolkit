@@ -2,7 +2,7 @@ name: "Orchestrator — Coordinator (Sonnet)"
 
 on:
   schedule:
-    - cron: "0 6 * * 1,4"   # Mon + Thu 15:00 KST
+    - cron: "0 6 * * 1-5"   # Mon–Fri 15:00 KST (daily weekdays)
   workflow_dispatch:
 
 permissions:

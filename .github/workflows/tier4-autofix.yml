@@ -18,6 +18,7 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+  actions: write
 
 jobs:
   fix:
@@ -26,6 +27,22 @@ jobs:
     steps:
       - name: Checkout hub
         uses: actions/checkout@v4
+
+      - name: Validate ECOSYSTEM_PAT scope
+        env:
+          GH_TOKEN: ${{ secrets.ECOSYSTEM_PAT != '' && secrets.ECOSYSTEM_PAT || github.token }}
+        run: |
+          if [ -z "${{ secrets.ECOSYSTEM_PAT }}" ]; then
+            echo "::warning::ECOSYSTEM_PAT is not configured. Tier 4 will fall back to github.token, which cannot push to sibling repos or create cross-repo PRs. Add ECOSYSTEM_PAT (scoped to all 13 ecosystem repos) in Settings > Secrets."
+          else
+            # Verify the PAT can see at least one sibling repo
+            STATUS=$(gh api "repos/pon00050/kr-beneish" --jq '.name' 2>/dev/null || echo "FAIL")
+            if [ "$STATUS" = "FAIL" ]; then
+              echo "::warning::ECOSYSTEM_PAT is set but cannot access pon00050/kr-beneish. Verify the PAT has repo scope for all 13 ecosystem repos."
+            else
+              echo "ECOSYSTEM_PAT validated — sibling repo access confirmed."
+            fi
+          fi
 
       - name: Write fix brief to scratchpad
         run: |
@@ -280,24 +297,71 @@ jobs:
           # STUB (new tests) and TEST_FAIL (source fixes) are safe to auto-merge
           # because verify_agent already ran the full test suite independently.
           LOW_RISK = {"DOC_DRIFT", "COUNT_DRIFT", "STUB", "TEST_FAIL", "CONVENTION_DRIFT"}
+          merge_succeeded = False
           if category in LOW_RISK and pr_url.startswith("https://"):
               merge = subprocess.run([
                   "gh", "pr", "merge", pr_url,
                   "--squash", "--auto",
+                  "--delete-branch",          # clean up autofix/* branch after merge
                   "--repo", f"pon00050/{repo}",
               ], capture_output=True, text=True)
               if merge.returncode == 0:
-                  print(f"Auto-merge enabled for {category} PR")
+                  print(f"Auto-merge enabled for {category} PR (branch will be deleted on merge)")
+                  merge_succeeded = True
               else:
                   print(f"Auto-merge skipped (branch protection may not be set): {merge.stderr.strip()[:100]}")
 
-          # Comment on originating issue
+          # Comment on originating issue; close it if the fix was auto-merged
           issue_num = brief.get("issue_number")
           if issue_num:
-              subprocess.run([
-                  "gh", "issue", "comment", str(issue_num),
-                  "--body", f"Auto-fix PR created: {pr_url}",
-              ], check=False)
+              if merge_succeeded:
+                  # Close the issue — the fix is merged (verify_agent gate already passed)
+                  subprocess.run([
+                      "gh", "issue", "close", str(issue_num),
+                      "--comment",
+                      f"Resolved by auto-merged PR: {pr_url}\n\n"
+                      f"Fix: {summary}\n"
+                      f"Category: {category} | Repo: {repo}",
+                  ], check=False)
+              else:
+                  subprocess.run([
+                      "gh", "issue", "comment", str(issue_num),
+                      "--body", f"Auto-fix PR created: {pr_url}",
+                  ], check=False)
+          PYEOF
+
+      - name: Trigger count-sync after merge (closes test-count drift)
+        # After a Tier 4 fix that adds/removes tests, dispatch count-sync immediately
+        # instead of waiting for the next daily tier1-tests run (up to 24h lag).
+        if: steps.parse.outputs.open_fix_prs == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, os, subprocess
+          from pathlib import Path
+
+          ws = Path(os.environ["GITHUB_WORKSPACE"])
+          pr_path = ws / "_scratchpad" / "pr-result.json"
+          if not pr_path.exists():
+              print("No pr-result — skipping count-sync dispatch")
+              exit(0)
+
+          d = json.loads(pr_path.read_text())
+          # Only dispatch for categories that add/remove tests
+          TEST_AFFECTING = {"TEST_FAIL", "STUB", "COUNT_DRIFT"}
+          if d.get("status") == "fixed" and d.get("category", "") in TEST_AFFECTING:
+              result = subprocess.run([
+                  "gh", "workflow", "run", "tier1-count-sync.yml",
+                  "--repo", os.environ.get("GITHUB_REPOSITORY", "pon00050/forensic-accounting-toolkit"),
+              ], capture_output=True, text=True)
+              if result.returncode == 0:
+                  print(f"Dispatched tier1-count-sync after {d['category']} fix in {d.get('repo')}")
+              else:
+                  print(f"count-sync dispatch failed (non-critical): {result.stderr.strip()[:150]}")
+          else:
+              print(f"Category {d.get('category')} does not affect test counts — skipping dispatch")
           PYEOF
 
       - name: Telegram notification
