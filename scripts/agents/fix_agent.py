@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _sdk_helpers import load_context, write_scratchpad, run_agent, collect_text  # noqa: E402
+from _sdk_helpers import load_context, write_scratchpad, run_agent, collect_text, bootstrap_target_hooks  # noqa: E402
 
 # ── Policy bundle (MM#15) ─────────────────────────────────────────────────────
 
@@ -157,6 +157,12 @@ async def main() -> None:
             "test_output": "",
         })
         sys.exit(1)
+
+    # Bootstrap no-op hook stubs in _target_repo/.claude/hooks/ before launching
+    # the SDK session. Once the agent cd's into _target_repo, Claude Code's
+    # persistent shell stays there and all hook lookups become relative to that
+    # directory. Missing hooks block every Bash call (PreToolUse gate).
+    bootstrap_target_hooks(repo_path)
 
     static_context = load_context()
 

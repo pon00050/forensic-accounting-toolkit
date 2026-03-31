@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _sdk_helpers import load_context, write_scratchpad, run_agent  # noqa: E402
+from _sdk_helpers import load_context, write_scratchpad, run_agent, bootstrap_target_hooks  # noqa: E402
 
 # ── Policy bundle (MM#15) ─────────────────────────────────────────────────────
 
@@ -171,6 +171,9 @@ async def main() -> None:
             "test_output": f"Repo not found at _target_repo or ../{repo}",
         })
         sys.exit(1)
+
+    # Bootstrap no-op hook stubs before launching — same reason as fix_agent.
+    bootstrap_target_hooks(repo_path)
 
     static_context = load_context()
 

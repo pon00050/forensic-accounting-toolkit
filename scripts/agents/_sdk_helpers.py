@@ -26,6 +26,45 @@ from typing import Any
 AGENTS_DIR = Path(__file__).parent
 SCRATCHPAD = Path(os.environ.get("GITHUB_WORKSPACE", ".")) / "_scratchpad"
 
+# Hook files referenced in hub .claude/settings.json (PreToolUse + PostToolUse).
+# These must exist in any directory that becomes the Claude Code session CWD,
+# otherwise tool calls are blocked before the CI-guard inside each script can run.
+_HOOK_STUBS: dict[str, str] = {
+    # PreToolUse/Bash — these BLOCK tool execution if missing
+    ".claude/hooks/pre-guard-destructive.py": "#!/usr/bin/env python3\nimport sys; sys.exit(0)\n",
+    ".claude/hooks/pre-commit-test-guard.py": "#!/usr/bin/env python3\nimport sys; sys.exit(0)\n",
+    # PostToolUse/Bash+Edit+Write
+    ".claude/hooks/post-push-reminder.py": "#!/usr/bin/env python3\nimport sys; sys.exit(0)\n",
+    ".claude/hooks/post-commit-test-sync.py": "#!/usr/bin/env python3\nimport sys; sys.exit(0)\n",
+    ".claude/hooks/post-edit-stale-check.py": "#!/usr/bin/env python3\nimport sys; sys.exit(0)\n",
+    ".claude/hooks/post-edit-sibling-guard.py": "#!/usr/bin/env python3\nimport sys; sys.exit(0)\n",
+    # SessionStart/Stop shell hooks (non-blocking but create them for completeness)
+    ".claude/hooks/session-start.sh": "#!/usr/bin/env bash\nexit 0\n",
+    ".claude/hooks/knowledge-freshness-check.sh": "#!/usr/bin/env bash\nexit 0\n",
+    ".claude/hooks/stop-doc-drift-scan.sh": "#!/usr/bin/env bash\nexit 0\n",
+    ".claude/hooks/knowledge-drift-check.sh": "#!/usr/bin/env bash\nexit 0\n",
+    ".claude/hooks/stop-board-snapshot.sh": "#!/usr/bin/env bash\nexit 0\n",
+}
+
+
+def bootstrap_target_hooks(target_path: Path) -> None:
+    """Create no-op hook stubs in target_path/.claude/hooks/ before launching an SDK session.
+
+    When the SDK agent cd's into target_path, Claude Code's persistent shell stays
+    there for the rest of the session. All subsequent tool hooks then look for
+    .claude/hooks/*.py relative to target_path — not the hub root. If the stubs
+    are missing, PreToolUse hooks fail and ALL Bash calls are blocked.
+
+    This function runs at Python-script level (before the SDK session), so it
+    bypasses the hook system entirely. Only creates stubs that don't already exist.
+    """
+    for rel_path, content in _HOOK_STUBS.items():
+        stub = target_path / rel_path
+        if not stub.exists():
+            stub.parent.mkdir(parents=True, exist_ok=True)
+            stub.write_text(content, encoding="utf-8")
+    print(f"[bootstrap] hook stubs ready in {target_path / '.claude' / 'hooks'}", file=sys.stderr)
+
 
 def load_context() -> str:
     """Load CONTEXT.md — the static prefix shared by all agents for prompt caching."""
