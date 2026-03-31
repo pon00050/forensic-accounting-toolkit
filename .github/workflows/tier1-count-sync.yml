@@ -6,6 +6,10 @@ on:
     types: [completed]
   workflow_dispatch:
 
+permissions:
+  issues: write
+  contents: read
+
 jobs:
   count-sync:
     runs-on: ubuntu-latest

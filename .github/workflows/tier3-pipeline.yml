@@ -8,6 +8,10 @@ on:
 # Human approval gate (Task 10): environment 'production' requires manual review
 # Set up at: Settings > Environments > production > Required reviewers: pon00050
 
+permissions:
+  issues: write
+  contents: read
+
 jobs:
   approve:
     runs-on: ubuntu-latest

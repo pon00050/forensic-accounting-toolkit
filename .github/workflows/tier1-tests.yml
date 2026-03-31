@@ -5,6 +5,10 @@ on:
     - cron: "0 22 * * *"   # 07:00 KST daily
   workflow_dispatch:
 
+permissions:
+  issues: write
+  contents: read
+
 jobs:
   test:
     name: "test (${{ matrix.repo }})"

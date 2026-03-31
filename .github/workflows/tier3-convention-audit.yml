@@ -5,6 +5,10 @@ on:
     - cron: "0 4 * * 0"   # Sunday 13:00 KST weekly
   workflow_dispatch:
 
+permissions:
+  issues: write
+  contents: read
+
 jobs:
   audit:
     runs-on: ubuntu-latest
