@@ -5,6 +5,10 @@ Fires after Edit or Write tool calls. Reads the modified file and warns if
 'kr-forensic-finance' appears in non-historical lines. Claude sees the warning
 and can fix it immediately, before the stale name is committed.
 """
+import os, sys as _sys
+if os.name != "nt" or os.environ.get("CI"):
+    _sys.exit(0)
+
 import json
 import sys
 

@@ -7,6 +7,10 @@ to ensure tests were run. Does NOT block (exit 0) — just reminds.
 This is the cross-repo equivalent of krff-shell's per-edit test hook.
 It catches commits in repos that lack their own hooks.
 """
+import os, sys as _sys
+if os.name != "nt" or os.environ.get("CI"):
+    _sys.exit(0)
+
 import json
 import re
 import sys

@@ -4,6 +4,10 @@
 Fires after any Bash command containing 'git push'. Outputs a checklist
 to stdout so Claude sees it and can act on it.
 """
+import os, sys as _sys
+if os.name != "nt" or os.environ.get("CI"):
+    _sys.exit(0)
+
 import json
 import sys
 

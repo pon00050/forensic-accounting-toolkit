@@ -8,6 +8,10 @@ differ, warns Claude to update the hub documentation.
 Designed to be fast and silent when counts match. Skips repos with no
 test suites, and skips if pytest fails to run.
 """
+import os, sys as _sys
+if os.name != "nt" or os.environ.get("CI"):
+    _sys.exit(0)
+
 import json
 import re
 import subprocess
