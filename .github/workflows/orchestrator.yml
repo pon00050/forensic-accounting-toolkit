@@ -94,7 +94,9 @@ jobs:
           name: scratchpad-orchestrator
           path: |
             _scratchpad/orchestrator.json
+            _scratchpad/health_summary.json
             _scratchpad/escalation.md
+            _scratchpad/task-notifications.jsonl
           retention-days: 90
           if-no-files-found: ignore
 
