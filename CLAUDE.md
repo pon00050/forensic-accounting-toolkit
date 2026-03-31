@@ -338,3 +338,38 @@ If anything unexpected is encountered (test failure, missing file, structure mis
 - Web portal logins requiring 2FA (PyPI, SEIBRO registration)
 - Spending money (PyPI tokens, API subscriptions)
 - Deleting published repos or irreversible external actions
+
+---
+
+## Verification-Gated Action Policy
+
+The autonomy question is **"has this already been verified?"** — not **"is a human watching?"**
+
+When an action is downstream of a trusted verification gate, executing it is part of
+completing the task. Asking for additional human approval at that point adds friction
+without adding safety — the gate already happened.
+
+### Act without asking when the prior gate is trusted
+
+| Prior gate | Examples of actions that follow |
+|-----------|----------------------------------|
+| `verify_agent` returned `status=pass` (all tests green) | Merge the PR, push the branch, close the originating issue |
+| CI is green on a commit I authored | Push to master, create a release tag |
+| `fix_agent` self-verified + verify_agent confirmed | Auto-merge the PR regardless of category |
+| Triage / orchestrator classified an item as AI-actionable | Execute the fix without re-asking whether to proceed |
+
+### Still confirm before acting — no prior gate exists
+
+| Action | Why it still requires confirmation |
+|--------|-----------------------------------|
+| Force-push (`--force`) to any branch | Overwrites history, no recovery |
+| `git reset --hard` on a shared branch | Same |
+| Dropping or truncating a data table or raw file | `data/raw/` is immutable by policy |
+| Deleting a published GitHub repo, branch, or release | Irreversible, visible to external users |
+| Any spend (API keys, subscriptions, tokens) | Money is the human's to authorize |
+
+### The decision rule in one sentence
+
+> If the action would have been the **next automatic step** in the workflow had
+> everything gone right, and the verification that "everything went right" has
+> already run — just do it.
