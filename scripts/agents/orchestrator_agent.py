@@ -252,6 +252,8 @@ async def main() -> None:
     write_scratchpad("orchestrator.json", result)
 
     # Check for escalation
+    # NOTE: _create_issues() mutates briefs in-place with issue_number fields,
+    # then we re-write orchestrator.json so the dispatch step can read them.
     if result.get("escalation_needed"):
         esc_path = scratchpad / "escalation.md"
         esc_path.write_text(
@@ -266,8 +268,14 @@ async def main() -> None:
     print(f"\n[orchestrator] Health: {result.get('ecosystem_health_score', '?')} | "
           f"{len(briefs)} action briefs", file=sys.stderr)
 
-    # Create GitHub issues for actionable briefs
+    # Create GitHub issues for actionable briefs.
+    # _create_issues() mutates each brief in-place with issue_number so the
+    # dispatch step in orchestrator.yml can include it in the Tier 4 payload
+    # and Tier 4 can close the originating issue after auto-merge.
     _create_issues(briefs, workspace)
+
+    # Re-write orchestrator.json now that briefs have issue_number populated.
+    write_scratchpad("orchestrator.json", result)
 
 
 def _create_issues(briefs: list, workspace: str) -> None:
@@ -327,7 +335,16 @@ def _create_issue(brief: dict) -> None:
     ], capture_output=True, text=True)
 
     if result.returncode == 0:
-        print(f"[issue] Created: {result.stdout.strip()}", file=sys.stderr)
+        issue_url = result.stdout.strip()
+        print(f"[issue] Created: {issue_url}", file=sys.stderr)
+        # Parse issue number from URL (e.g. .../issues/42) and write back to
+        # the brief in-place so the dispatch step can include it in the Tier 4
+        # payload, enabling Tier 4 to close the issue after auto-merge.
+        try:
+            issue_num = int(issue_url.rstrip("/").split("/")[-1])
+            brief["issue_number"] = issue_num
+        except (ValueError, IndexError, AttributeError):
+            pass  # non-fatal — dispatch will fall back to open-issues.json lookup
     else:
         print(f"[issue] Skipped ({result.stderr.strip()[:100]})", file=sys.stderr)
 

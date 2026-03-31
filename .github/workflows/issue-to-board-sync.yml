@@ -1,0 +1,169 @@
+name: "Issue → Board Auto-Sync"
+
+# Auto-adds agent-task and needs-human issues to the project board the moment
+# they are labeled. Closes the triage/orchestrator → board loop: without this,
+# issues created by workflows sit unlinked from the project board and never
+# reach the AI Autonomy Protocol reader (which filters by board items).
+#
+# Requires ECOSYSTEM_PAT with 'project' scope for personal-account projects.
+# Falls back to github.token with a warning (which lacks 'project' scope).
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  issues: read
+
+jobs:
+  sync:
+    # Only run for labels that map to board work
+    if: |
+      github.event.label.name == 'agent-task' ||
+      github.event.label.name == 'needs-human'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Validate PAT
+        id: pat_check
+        env:
+          ECOSYSTEM_PAT: ${{ secrets.ECOSYSTEM_PAT }}
+        run: |
+          if [ -z "$ECOSYSTEM_PAT" ]; then
+            echo "::warning::ECOSYSTEM_PAT not configured — cannot add issue #${{ github.event.issue.number }} to project board. Set ECOSYSTEM_PAT (with 'project' scope) in Settings > Secrets > Actions."
+            echo "available=false" >> $GITHUB_OUTPUT
+          else
+            echo "available=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Add issue to project board
+        if: steps.pat_check.outputs.available == 'true'
+        id: add_item
+        env:
+          GH_TOKEN: ${{ secrets.ECOSYSTEM_PAT }}
+        run: |
+          ISSUE_URL="${{ github.event.issue.html_url }}"
+          # gh project item-add is idempotent — safe to re-run on re-label
+          ITEM_ID=$(gh project item-add 1 --owner pon00050 --url "$ISSUE_URL" --format json \
+            --jq '.id' 2>/dev/null || echo "")
+          if [ -z "$ITEM_ID" ]; then
+            echo "::warning::gh project item-add failed. Verify ECOSYSTEM_PAT has 'project' scope."
+            echo "item_id=" >> $GITHUB_OUTPUT
+          else
+            echo "Added issue #${{ github.event.issue.number }} → board item $ITEM_ID"
+            echo "item_id=$ITEM_ID" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set Status and Owner fields
+        # Best-effort: set Status=Todo and Owner=AI|Human based on label.
+        # Uses GraphQL because ProjectV2 field updates require it.
+        # Failures here are non-fatal — item is already on the board.
+        if: steps.add_item.outputs.item_id != ''
+        env:
+          GH_TOKEN: ${{ secrets.ECOSYSTEM_PAT }}
+          ITEM_ID: ${{ steps.add_item.outputs.item_id }}
+          LABEL: ${{ github.event.label.name }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, os, subprocess, sys
+
+          item_id = os.environ["ITEM_ID"]
+          label   = os.environ["LABEL"]
+
+          # ------------------------------------------------------------------
+          # 1. Fetch project metadata: node ID + field definitions
+          # ------------------------------------------------------------------
+          gql_fields = """
+          {
+            user(login: "pon00050") {
+              projectV2(number: 1) {
+                id
+                fields(first: 30) {
+                  nodes {
+                    __typename
+                    ... on ProjectV2SingleSelectField {
+                      id name options { id name }
+                    }
+                    ... on ProjectV2Field {
+                      id name dataType
+                    }
+                  }
+                }
+              }
+            }
+          }
+          """
+          r = subprocess.run(
+              ["gh", "api", "graphql", "-f", f"query={gql_fields}"],
+              capture_output=True, text=True,
+          )
+          if r.returncode != 0:
+              print(f"[warn] GraphQL field query failed: {r.stderr[:200]}")
+              sys.exit(0)
+
+          data = json.loads(r.stdout)
+          project = data["data"]["user"]["projectV2"]
+          project_id = project["id"]
+
+          # Index single-select fields by name
+          select_fields = {}
+          for node in project["fields"]["nodes"]:
+              if node.get("__typename") == "ProjectV2SingleSelectField":
+                  select_fields[node["name"]] = {
+                      "id": node["id"],
+                      "options": {opt["name"]: opt["id"] for opt in node.get("options", [])},
+                  }
+
+          # ------------------------------------------------------------------
+          # 2. Set Status = Todo
+          # ------------------------------------------------------------------
+          status_f = select_fields.get("Status")
+          if status_f and "Todo" in status_f["options"]:
+              m = subprocess.run(["gh", "api", "graphql", "-f", f"""query=
+                mutation {{
+                  updateProjectV2ItemFieldValue(input: {{
+                    projectId: "{project_id}"
+                    itemId: "{item_id}"
+                    fieldId: "{status_f['id']}"
+                    value: {{ singleSelectOptionId: "{status_f['options']['Todo']}" }}
+                  }}) {{ projectV2Item {{ id }} }}
+                }}
+              """], capture_output=True, text=True)
+              if m.returncode == 0:
+                  print("Status → Todo")
+              else:
+                  print(f"[warn] Status update failed: {m.stderr[:100]}")
+          else:
+              print(f"[skip] Status field not found or 'Todo' option missing. Available: {list(status_f['options'].keys()) if status_f else 'field absent'}")
+
+          # ------------------------------------------------------------------
+          # 3. Set Owner = AI (agent-task) or Human (needs-human)
+          # ------------------------------------------------------------------
+          owner_f = select_fields.get("Owner")
+          owner_value = "AI" if label == "agent-task" else "Human"
+          if owner_f and owner_value in owner_f["options"]:
+              m = subprocess.run(["gh", "api", "graphql", "-f", f"""query=
+                mutation {{
+                  updateProjectV2ItemFieldValue(input: {{
+                    projectId: "{project_id}"
+                    itemId: "{item_id}"
+                    fieldId: "{owner_f['id']}"
+                    value: {{ singleSelectOptionId: "{owner_f['options'][owner_value]}" }}
+                  }}) {{ projectV2Item {{ id }} }}
+                }}
+              """], capture_output=True, text=True)
+              if m.returncode == 0:
+                  print(f"Owner → {owner_value}")
+              else:
+                  print(f"[warn] Owner update failed: {m.stderr[:100]}")
+          else:
+              print(f"[skip] Owner field not found or '{owner_value}' option missing. Available: {list(owner_f['options'].keys()) if owner_f else 'field absent'}")
+
+          print(f"Board sync complete: issue #{os.environ.get('GITHUB_EVENT_ISSUE_NUMBER','?')} → item {item_id}")
+          PYEOF
+        env:
+          GH_TOKEN: ${{ secrets.ECOSYSTEM_PAT }}
+          ITEM_ID: ${{ steps.add_item.outputs.item_id }}
+          LABEL: ${{ github.event.label.name }}
+          GITHUB_EVENT_ISSUE_NUMBER: ${{ github.event.issue.number }}

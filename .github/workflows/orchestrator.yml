@@ -156,6 +156,25 @@ jobs:
                   print(f"  Skipping {repo} [{brief.get('category')}] — autofix PR in flight")
                   continue
 
+              # Resolve issue_number: prefer the number written back by
+              # _create_issue() in orchestrator_agent.py; fall back to a
+              # title-keyword lookup in open-issues.json for issues created
+              # by other workflows (triage, convention-check, etc.).
+              issue_number = brief.get("issue_number")
+              if not issue_number:
+                  open_issues_path = Path("_scratchpad/open-issues.json")
+                  if open_issues_path.exists():
+                      try:
+                          open_issues = json.loads(open_issues_path.read_text())
+                          cat = brief.get("category", "")
+                          for oi in open_issues:
+                              title = oi.get("title", "")
+                              if repo in title and cat in title:
+                                  issue_number = oi["number"]
+                                  break
+                      except Exception:
+                          pass
+
               payload = {
                   "event_type": "agent-fix",
                   "client_payload": {
@@ -168,6 +187,7 @@ jobs:
                       "command": brief.get("command"),
                       "ai_actionable": True,
                       "brief_id": brief.get("id", ""),
+                      "issue_number": issue_number,
                   }
               }
               r = subprocess.run(
