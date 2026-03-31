@@ -46,11 +46,13 @@ for repo in "${!TEST_RUNNERS[@]}"; do
     fi
     runner="${TEST_RUNNERS[$repo]}"
     cd "$rpath"
-    # Collect test count; capture exit code to distinguish failure from genuine 0
-    count_line=$(eval "$runner tests/ --co -q 2>/dev/null | tail -2 | head -1")
-    exit_code=$?
-    actual=$(echo "$count_line" | grep -oP '^\d+' || echo "0")
-    if [ "$exit_code" -ne 0 ] || [ "$actual" = "0" ]; then
+    # Collect test count — capture full output; || true prevents set -e exit on
+    # non-zero exit codes (collection errors, missing venv, import failures).
+    count_output=$(eval "$runner tests/ --co -q 2>/dev/null" || true)
+    # Parse the "N tests collected" line from anywhere in the output.
+    # Using tail-2|head-1 was wrong: it picks up a test name, not the count line.
+    actual=$(echo "$count_output" | grep -oP '^\d+(?= tests? collected)' | tail -1 || true)
+    if [ -z "$actual" ] || [ "$actual" = "0" ]; then
         # Treat as collection failure, not a genuine zero-test count
         COLLECTION_FAILED[$repo]=1
         actual=0
@@ -62,7 +64,7 @@ done
 # Parse claimed counts from hub CLAUDE.md
 # Matches lines like: | **kr-beneish** | ... | 61 |
 while IFS= read -r line; do
-    if [[ "$line" =~ \|\s*\*\*([^\*]+)\*\*\s*\|.*\|\s*([0-9]+)\s*\| ]]; then
+    if [[ "$line" =~ \|[[:space:]]*\*\*([^\*]+)\*\*[[:space:]]*\|.*\|[[:space:]]*([0-9]+)[[:space:]]*\| ]]; then
         repo="${BASH_REMATCH[1]}"
         count="${BASH_REMATCH[2]}"
         CLAIMED_COUNTS[$repo]="$count"
