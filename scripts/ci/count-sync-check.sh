@@ -46,11 +46,16 @@ for repo in "${!TEST_RUNNERS[@]}"; do
     fi
     runner="${TEST_RUNNERS[$repo]}"
     cd "$rpath"
+    # Root cause of false zeros: uv sync installs all deps but silently fails
+    # the project's own editable install (hatchling build error exits 0 with
+    # --quiet). Fix: explicitly install the project package before collection
+    # so "import kr_derivatives" resolves. uv pip install is idempotent.
+    if [[ "$runner" == uv* ]]; then
+        uv pip install -e . --quiet 2>/dev/null || true
+    fi
     # Capture both stdout and stderr — 2>/dev/null was hiding real collection
-    # errors (uv venv not set up, missing deps, import failures) and making
-    # genuine failures indistinguishable from "0 tests". The grep below only
-    # matches the "N tests collected" line, so stderr noise doesn't corrupt
-    # the count; it just becomes visible in the workflow log.
+    # errors. The grep below only matches the "N tests collected" line, so
+    # stderr noise does not corrupt the count; it just becomes visible.
     count_output=$(eval "$runner tests/ --co -q 2>&1" || true)
     # Parse the "N tests collected" line from anywhere in the output.
     actual=$(echo "$count_output" | grep -oP '^\d+(?= tests? collected)' | tail -1 || true)

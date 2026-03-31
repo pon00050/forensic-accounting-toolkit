@@ -67,7 +67,9 @@ jobs:
 
       - name: Install dependencies
         working-directory: _deps/krff-shell
-        run: uv sync 2>/dev/null || true
+        run: |
+          uv sync > /dev/null || echo "::warning::uv sync failed for krff-shell"
+          uv pip install -e . --quiet 2>/dev/null || true
 
       - name: Set up Python + claude
         uses: actions/setup-python@v5
