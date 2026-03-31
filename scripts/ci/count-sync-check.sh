@@ -30,9 +30,11 @@ declare -A ACTUAL_COUNTS=()
 declare -A CLAIMED_COUNTS=()
 declare -a MISMATCHES=()
 
-# checkout-ecosystem.sh symlinks $GITHUB_WORKSPACE/_deps/<repo> → $PARENT/<repo>
-# so repos are accessible at $PARENT/<repo> after that step runs.
-REPO_BASE="$PARENT"
+# Use the real _deps/<repo> path, not the $PARENT symlink.
+# uv editable install creates .pth files referencing the directory it ran in;
+# running uv run from a symlink path causes those references to misresolve.
+# The _deps/ path is the actual checkout — no symlink confusion.
+REPO_BASE="$GITHUB_WORKSPACE/_deps"
 
 declare -A COLLECTION_FAILED=()
 
