@@ -4,6 +4,22 @@ Audit trail for ecosystem-wide changes coordinated from this hub.
 
 ---
 
+## 2026-03-31 — Triage friction fixes (board snapshot, sibling guard, CI false positives)
+
+Four workflow frictions addressed:
+
+**1. Cross-repo edit guard** — new `.claude/hooks/post-edit-sibling-guard.py` (PostToolUse on Edit/Write): warns when editing a sibling repo without first reading its CLAUDE.md. Soft reminder, not a block.
+
+**2. Board snapshot for CI/offline fallback** — new `.claude/hooks/stop-board-snapshot.sh` (Stop hook): exports `gh project item-list` JSON to `board-snapshot.json` at session end, auto-staged. `triage-scan.sh` now falls back to this snapshot when live `gh project` is unavailable (CI lacks `project` scope). Initial snapshot committed (20 items).
+
+**3. Triage staleness signal** — `session-start.sh` now checks the open `agent:triage` issue date and warns if it's from a prior day. `tier2-triage.yml` issue body now includes a freshness footer.
+
+**4. CI data false positives** — `triage-scan.sh` SOURCE 6 (DATA FRESHNESS), SOURCE 10 kr-derivatives check, and SOURCE 10 krff-shell pipeline check now skip with `[SKIP]` when `GITHUB_ACTIONS` is set. Previously, CI shallow clones (no parquets) caused false P0 "MISSING" reports.
+
+**Memory gray-area clarification** — saved feedback memory: deferral/skip decisions (e.g. "don't recommend kr-beneish PyPI") are valid memories even when they concern code repos; the decision itself is the non-derivable fact.
+
+---
+
 ## 2026-03-31 — CI/CD agent team fixes (tier1-tests + kr-beneish)
 
 Addressed P0/P1 findings from first tier2-triage run (Issue #2):

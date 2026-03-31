@@ -146,6 +146,12 @@ GitHub Projects board #1, owner pon00050:
 gh project item-list 1 --owner pon00050 --format json
 ```
 
+**CI fallback:** The default `GITHUB_TOKEN` lacks `project` scope, so the live
+command fails on GitHub Actions. When it fails, `triage-scan.sh` reads
+`board-snapshot.json` (committed to the hub root, exported at each local session
+end by `stop-board-snapshot.sh`). The snapshot includes an `exported_at`
+timestamp — flag it to the user if older than 48 hours.
+
 AI-owned Todo items are the primary action queue.
 
 ---

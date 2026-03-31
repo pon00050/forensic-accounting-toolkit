@@ -32,9 +32,8 @@ echo ""
 # SOURCE 1: Board state
 # ─────────────────────────────────────────────
 echo "--- BOARD ---"
-if [ -n "$GH" ]; then
-    BOARD_JSON=$("$GH" project item-list 1 --owner pon00050 --format json 2>/dev/null) && {
-        echo "$BOARD_JSON" | python -c "
+_print_board_json() {
+    python -c "
 import sys, json
 data = json.load(sys.stdin)
 items = data.get('items', [])
@@ -52,9 +51,27 @@ for status in ['Todo', 'In Progress', 'Done']:
             owner = i.get('owner', '?')
             print(f'  [{priority}] [{owner}] {title}')
 " 2>/dev/null
-    } || echo "UNAVAILABLE (gh CLI offline or auth issue)"
-else
-    echo "UNAVAILABLE (gh CLI not found)"
+}
+BOARD_JSON=""
+if [ -n "$GH" ]; then
+    BOARD_JSON=$("$GH" project item-list 1 --owner pon00050 --format json 2>/dev/null) && \
+        echo "$BOARD_JSON" | _print_board_json || BOARD_JSON=""
+fi
+if [ -z "$BOARD_JSON" ]; then
+    # Fallback: committed board snapshot (available on CI and offline sessions)
+    SNAPSHOT="$HUB/board-snapshot.json"
+    if [ -f "$SNAPSHOT" ]; then
+        SNAP_DATE=$(python -c "import json; print(json.load(open('$SNAPSHOT')).get('exported_at','unknown'))" 2>/dev/null || echo "unknown")
+        echo "LIVE UNAVAILABLE — using snapshot from $SNAP_DATE"
+        BOARD_JSON=$(python -c "
+import json, sys
+snap = json.load(open(sys.argv[1]))
+print(json.dumps({'items': snap.get('items', [])}))
+" "$SNAPSHOT" 2>/dev/null || echo "")
+        [ -n "$BOARD_JSON" ] && echo "$BOARD_JSON" | _print_board_json
+    else
+        echo "UNAVAILABLE (no live access, no snapshot committed yet)"
+    fi
 fi
 echo ""
 
@@ -210,30 +227,34 @@ echo ""
 # SOURCE 6: Data freshness (parquet sync)
 # ─────────────────────────────────────────────
 echo "--- DATA FRESHNESS ---"
-for pq in "${PARQUET_FILES[@]}"; do
-    src_file="$PIPELINE_SRC/$pq"
-    dst_file="$PIPELINE_DST/$pq"
+if [ -n "${GITHUB_ACTIONS:-}" ]; then
+    echo "  [SKIP] Running on CI — data freshness checks require local data files"
+else
+    for pq in "${PARQUET_FILES[@]}"; do
+        src_file="$PIPELINE_SRC/$pq"
+        dst_file="$PIPELINE_DST/$pq"
 
-    if [ ! -f "$src_file" ]; then
-        echo "  [MISSING] $pq — not in krff-shell output"
-        continue
-    fi
-    if [ ! -f "$dst_file" ]; then
-        echo "  [MISSING] $pq — not in kr-derivatives input"
-        continue
-    fi
+        if [ ! -f "$src_file" ]; then
+            echo "  [MISSING] $pq — not in krff-shell output"
+            continue
+        fi
+        if [ ! -f "$dst_file" ]; then
+            echo "  [MISSING] $pq — not in kr-derivatives input"
+            continue
+        fi
 
-    src_epoch=$(file_epoch "$src_file")
-    dst_epoch=$(file_epoch "$dst_file")
+        src_epoch=$(file_epoch "$src_file")
+        dst_epoch=$(file_epoch "$dst_file")
 
-    if [ "$src_epoch" -gt "$dst_epoch" ]; then
-        echo "  [STALE] $pq — source newer than downstream copy"
-        echo "    Source: $(date -d @"$src_epoch" '+%Y-%m-%d %H:%M' 2>/dev/null || date -r "$src_file" '+%Y-%m-%d %H:%M' 2>/dev/null || echo 'unknown')"
-        echo "    Copy:   $(date -d @"$dst_epoch" '+%Y-%m-%d %H:%M' 2>/dev/null || date -r "$dst_file" '+%Y-%m-%d %H:%M' 2>/dev/null || echo 'unknown')"
-    else
-        echo "  [OK] $pq — in sync"
-    fi
-done
+        if [ "$src_epoch" -gt "$dst_epoch" ]; then
+            echo "  [STALE] $pq — source newer than downstream copy"
+            echo "    Source: $(date -d @"$src_epoch" '+%Y-%m-%d %H:%M' 2>/dev/null || date -r "$src_file" '+%Y-%m-%d %H:%M' 2>/dev/null || echo 'unknown')"
+            echo "    Copy:   $(date -d @"$dst_epoch" '+%Y-%m-%d %H:%M' 2>/dev/null || date -r "$dst_file" '+%Y-%m-%d %H:%M' 2>/dev/null || echo 'unknown')"
+        else
+            echo "  [OK] $pq — in sync"
+        fi
+    done
+fi
 echo ""
 
 # ─────────────────────────────────────────────
@@ -384,8 +405,10 @@ echo ""
 # ─────────────────────────────────────────────
 echo "--- DEPENDENCY CHAIN ---"
 
-# Check: kr-derivatives data/input/ exists and has parquets
-if [ -d "$PIPELINE_DST" ]; then
+# Check: kr-derivatives data/input/ exists and has parquets (local only — CI has no data files)
+if [ -n "${GITHUB_ACTIONS:-}" ]; then
+    echo "  [SKIP] kr-derivatives parquet check — requires local data files"
+elif [ -d "$PIPELINE_DST" ]; then
     pq_count=$(find "$PIPELINE_DST" -name '*.parquet' 2>/dev/null | wc -l | tr -d ' ')
     if [ "$pq_count" -eq 0 ]; then
         echo "  [BLOCKED] kr-derivatives has no input parquets — run: bash ecosystem.sh copy-parquets"
@@ -406,8 +429,10 @@ for repo in "${ALL_REPOS[@]}"; do
     fi
 done
 
-# Check: krff-shell has its pipeline outputs (uses shared PARQUET_FILES)
-if [ -d "$PIPELINE_SRC" ]; then
+# Check: krff-shell has its pipeline outputs (local only — CI has no data files)
+if [ -n "${GITHUB_ACTIONS:-}" ]; then
+    echo "  [SKIP] krff-shell pipeline output check — requires local data files"
+elif [ -d "$PIPELINE_SRC" ]; then
     for pq in "${PARQUET_FILES[@]}"; do
         if [ ! -f "$PIPELINE_SRC/$pq" ]; then
             echo "  [WARN] krff-shell missing $pq in processed output"

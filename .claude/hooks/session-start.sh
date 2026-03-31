@@ -17,4 +17,21 @@ fi
 bash "$HUB/triage-scan.sh" quick
 
 echo ""
+
+# Staleness check: warn if the open triage issue is from a prior day
+if [ -n "${GH:-}" ]; then
+    TRIAGE_TITLE=$("$GH" issue list --label agent:triage --state open --json title --jq '.[0].title' 2>/dev/null || true)
+    if [ -n "$TRIAGE_TITLE" ]; then
+        TRIAGE_DATE=$(echo "$TRIAGE_TITLE" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' || true)
+        TODAY=$(date '+%Y-%m-%d')
+        if [ -n "$TRIAGE_DATE" ] && [ "$TRIAGE_DATE" != "$TODAY" ]; then
+            echo "--- STALE TRIAGE ---"
+            echo "  Open triage issue is from $TRIAGE_DATE (today: $TODAY)"
+            echo "  Run /triage for current data, or trigger tier2-triage workflow."
+            echo "---"
+            echo ""
+        fi
+    fi
+fi
+
 echo "Run /triage for full task scan across all 10 sources."

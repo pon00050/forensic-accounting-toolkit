@@ -57,6 +57,10 @@
           {
             "type": "command",
             "command": "python C:/Users/pon00/Projects/forensic-accounting-toolkit/.claude/hooks/post-edit-stale-check.py"
+          },
+          {
+            "type": "command",
+            "command": "python C:/Users/pon00/Projects/forensic-accounting-toolkit/.claude/hooks/post-edit-sibling-guard.py"
           }
         ]
       },
@@ -66,6 +70,10 @@
           {
             "type": "command",
             "command": "python C:/Users/pon00/Projects/forensic-accounting-toolkit/.claude/hooks/post-edit-stale-check.py"
+          },
+          {
+            "type": "command",
+            "command": "python C:/Users/pon00/Projects/forensic-accounting-toolkit/.claude/hooks/post-edit-sibling-guard.py"
           }
         ]
       }
@@ -84,6 +92,10 @@
           {
             "type": "command",
             "command": "bash C:/Users/pon00/Projects/forensic-accounting-toolkit/.claude/hooks/knowledge-drift-check.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash C:/Users/pon00/Projects/forensic-accounting-toolkit/.claude/hooks/stop-board-snapshot.sh"
           }
         ]
       }

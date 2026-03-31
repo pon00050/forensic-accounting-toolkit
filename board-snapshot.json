@@ -1,0 +1,272 @@
+{
+  "exported_at": "2026-03-31T21:31:26",
+  "source": "gh project item-list 1 --owner pon00050",
+  "items": [
+    {
+      "content": {
+        "body": "## Problem\n`price_volume.parquet` contains unadjusted prices. Stock splits create false signals downstream in kr-derivatives.\n\n- Ticker 224060 shows moneyness 334x (stock split artifact)\n- 254 rows with moneyness >10x are contaminated\n- kr-derivatives Run 1 flag rate is 49.3% (should be <35% after fix)\n\n## Fix\nUse pykrx `stock.get_market_ohlcv_by_date` with `adjusted=True` flag.\n\n## Verification\nAfter fix, moneyness >10x count should drop from 254 to <20.\n\n## Cross-reference\n- Discovered in: kr-derivatives Run 1 (`reports/first_run_lessons.md`)\n- Detailed plan: kr-derivatives `reports/second_run_prep.md` (Change 1)\n- Tracked as: XB-001 in forensic-accounting-toolkit",
+        "number": 1,
+        "repository": "pon00050/krff-shell",
+        "title": "Fix: use split-adjusted prices in extract_price_volume.py",
+        "type": "Issue",
+        "url": "https://github.com/pon00050/krff-shell/issues/1"
+      },
+      "id": "PVTI_lAHOAH3il84BRykIzgneId8",
+      "labels": [
+        "bug"
+      ],
+      "owner": "AI",
+      "priority": "P0",
+      "repository": "https://github.com/pon00050/krff-shell",
+      "status": "Done",
+      "title": "Fix: use split-adjusted prices in extract_price_volume.py"
+    },
+    {
+      "content": {
+        "body": "",
+        "id": "DI_lAHOAH3il84BRykIzgKRNT8",
+        "title": "Publish kr-beneish to GitHub",
+        "type": "DraftIssue"
+      },
+      "id": "PVTI_lAHOAH3il84BRykIzgneIfQ",
+      "owner": "AI",
+      "priority": "P0",
+      "status": "Done",
+      "title": "Publish kr-beneish to GitHub"
+    },
+    {
+      "content": {
+        "body": "",
+        "id": "DI_lAHOAH3il84BRykIzgKRNUA",
+        "title": "Publish kr-derivatives to GitHub",
+        "type": "DraftIssue"
+      },
+      "id": "PVTI_lAHOAH3il84BRykIzgneIfU",
+      "owner": "AI",
+      "priority": "P0",
+      "status": "Done",
+      "title": "Publish kr-derivatives to GitHub"
+    },
+    {
+      "content": {
+        "body": "",
+        "id": "DI_lAHOAH3il84BRykIzgKRNUE",
+        "title": "Publish kr-trading-calendar to GitHub",
+        "type": "DraftIssue"
+      },
+      "id": "PVTI_lAHOAH3il84BRykIzgneIfc",
+      "owner": "AI",
+      "priority": "P0",
+      "status": "Done",
+      "title": "Publish kr-trading-calendar to GitHub"
+    },
+    {
+      "content": {
+        "body": "",
+        "id": "DI_lAHOAH3il84BRykIzgKRNUI",
+        "title": "Publish jfia-catalog to GitHub",
+        "type": "DraftIssue"
+      },
+      "id": "PVTI_lAHOAH3il84BRykIzgneIfw",
+      "owner": "AI",
+      "priority": "P0",
+      "status": "Done",
+      "title": "Publish jfia-catalog to GitHub"
+    },
+    {
+      "content": {
+        "body": "",
+        "id": "DI_lAHOAH3il84BRykIzgKRNUM",
+        "title": "Publish jfia-forensic to GitHub",
+        "type": "DraftIssue"
+      },
+      "id": "PVTI_lAHOAH3il84BRykIzgneIf4",
+      "owner": "AI",
+      "priority": "P0",
+      "status": "Done",
+      "title": "Publish jfia-forensic to GitHub"
+    },
+    {
+      "content": {
+        "body": "",
+        "id": "DI_lAHOAH3il84BRykIzgKRNUQ",
+        "title": "kr-derivatives Run 2 (after XB-001 fix)",
+        "type": "DraftIssue"
+      },
+      "id": "PVTI_lAHOAH3il84BRykIzgneIf8",
+      "owner": "AI",
+      "priority": "P1",
+      "status": "Done",
+      "title": "kr-derivatives Run 2 (after XB-001 fix)"
+    },
+    {
+      "content": {
+        "body": "",
+        "id": "DI_lAHOAH3il84BRykIzgKRNUU",
+        "title": "kr-beneish PyPI publication",
+        "type": "DraftIssue"
+      },
+      "id": "PVTI_lAHOAH3il84BRykIzgneIgA",
+      "owner": "AI",
+      "priority": "P1",
+      "status": "Todo",
+      "title": "kr-beneish PyPI publication"
+    },
+    {
+      "content": {
+        "body": "",
+        "id": "DI_lAHOAH3il84BRykIzgKRNUY",
+        "title": "Add CLAUDE.md to kr-trading-calendar",
+        "type": "DraftIssue"
+      },
+      "id": "PVTI_lAHOAH3il84BRykIzgneIgI",
+      "owner": "AI",
+      "priority": "P0",
+      "status": "Done",
+      "title": "Add CLAUDE.md to kr-trading-calendar"
+    },
+    {
+      "content": {
+        "body": "",
+        "id": "DI_lAHOAH3il84BRykIzgKRNUc",
+        "title": "Send 4 LinkedIn InMails (Timefolio, Billionfold, VIP, Kabouter)",
+        "type": "DraftIssue"
+      },
+      "id": "PVTI_lAHOAH3il84BRykIzgneIgQ",
+      "owner": "Human",
+      "priority": "P0",
+      "status": "Todo",
+      "title": "Send 4 LinkedIn InMails (Timefolio, Billionfold, VIP, Kabouter)"
+    },
+    {
+      "content": {
+        "body": "",
+        "id": "DI_lAHOAH3il84BRykIzgKRNUg",
+        "title": "Apply to EY Forensic / Deloitte with GitHub portfolio",
+        "type": "DraftIssue"
+      },
+      "id": "PVTI_lAHOAH3il84BRykIzgneIgY",
+      "owner": "Human",
+      "priority": "P0",
+      "status": "Todo",
+      "title": "Apply to EY Forensic / Deloitte with GitHub portfolio"
+    },
+    {
+      "content": {
+        "body": "",
+        "id": "DI_lAHOAH3il84BRykIzgKRNUk",
+        "title": "Call G1 \u00ec\u00a3\u00bc\u00ea\u00b4\u20ac\u00ea\u00b8\u00b0\u00ea\u00b4\u20ac SNU \u00ec\u2039\u0153\u00ed\udc9d\u00a5 \u00e2\u20ac\u201d grant deadline Mar 24",
+        "type": "DraftIssue"
+      },
+      "id": "PVTI_lAHOAH3il84BRykIzgneIgg",
+      "owner": "Human",
+      "priority": "P0",
+      "status": "Todo",
+      "title": "Call G1 \u00ec\u00a3\u00bc\u00ea\u00b4\u20ac\u00ea\u00b8\u00b0\u00ea\u00b4\u20ac SNU \u00ec\u2039\u0153\u00ed\udc9d\u00a5 \u00e2\u20ac\u201d grant deadline Mar 24"
+    },
+    {
+      "content": {
+        "body": "",
+        "id": "DI_lAHOAH3il84BRykIzgKRNUo",
+        "title": "SEIBRO API: call KSD 051-519-1420 for approval (XB-002)",
+        "type": "DraftIssue"
+      },
+      "id": "PVTI_lAHOAH3il84BRykIzgneIgo",
+      "owner": "Human",
+      "priority": "P2",
+      "status": "Todo",
+      "title": "SEIBRO API: call KSD 051-519-1420 for approval (XB-002)"
+    },
+    {
+      "content": {
+        "body": "",
+        "id": "DI_lAHOAH3il84BRykIzgKRNUs",
+        "title": "Phase 3 DART reassessment (May 2026)",
+        "type": "DraftIssue"
+      },
+      "id": "PVTI_lAHOAH3il84BRykIzgneIgs",
+      "owner": "AI",
+      "priority": "P3",
+      "status": "Todo",
+      "title": "Phase 3 DART reassessment (May 2026)"
+    },
+    {
+      "content": {
+        "body": "",
+        "id": "DI_lAHOAH3il84BRykIzgKRNbk",
+        "title": "Migrate kr-beneish to hatchling build system",
+        "type": "DraftIssue"
+      },
+      "id": "PVTI_lAHOAH3il84BRykIzgneL4s",
+      "owner": "AI",
+      "priority": "P1",
+      "status": "Done",
+      "title": "Migrate kr-beneish to hatchling build system"
+    },
+    {
+      "content": {
+        "body": "",
+        "id": "DI_lAHOAH3il84BRykIzgKRNbo",
+        "title": "Update forensic-accounting-toolkit README for GitHub",
+        "type": "DraftIssue"
+      },
+      "id": "PVTI_lAHOAH3il84BRykIzgneL6o",
+      "owner": "AI",
+      "priority": "P1",
+      "status": "Done",
+      "title": "Update forensic-accounting-toolkit README for GitHub"
+    },
+    {
+      "content": {
+        "body": "",
+        "id": "DI_lAHOAH3il84BRykIzgKRQeE",
+        "title": "kr-derivatives Run 4 (resolve 32 remaining >10x moneyness outliers)",
+        "type": "DraftIssue"
+      },
+      "id": "PVTI_lAHOAH3il84BRykIzgne0EQ",
+      "owner": "AI",
+      "priority": "P1",
+      "status": "Done",
+      "title": "kr-derivatives Run 4 (resolve 32 remaining >10x moneyness outliers)"
+    },
+    {
+      "content": {
+        "body": "",
+        "id": "DI_lAHOAH3il84BRykIzgKRQeI",
+        "title": "kr-enforcement-cases dataset",
+        "type": "DraftIssue"
+      },
+      "id": "PVTI_lAHOAH3il84BRykIzgne0Eo",
+      "owner": "AI",
+      "priority": "P2",
+      "status": "Done",
+      "title": "kr-enforcement-cases dataset"
+    },
+    {
+      "content": {
+        "body": "",
+        "id": "DI_lAHOAH3il84BRykIzgKRQeM",
+        "title": "Platform integration (Phase 4)",
+        "type": "DraftIssue"
+      },
+      "id": "PVTI_lAHOAH3il84BRykIzgne0FA",
+      "owner": "AI",
+      "priority": "P3",
+      "status": "Todo",
+      "title": "Platform integration (Phase 4)"
+    },
+    {
+      "content": {
+        "body": "",
+        "id": "DI_lAHOAH3il84BRykIzgKRQeQ",
+        "title": "Enforcement case search MCP tool #12",
+        "type": "DraftIssue"
+      },
+      "id": "PVTI_lAHOAH3il84BRykIzgne0Fc",
+      "owner": "AI",
+      "priority": "P3",
+      "status": "Todo",
+      "title": "Enforcement case search MCP tool #12"
+    }
+  ]
+}
