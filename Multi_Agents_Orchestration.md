@@ -92,6 +92,24 @@ request prefixes, the prompt cache is maximized — forks are cheaper per token 
 spawning fresh agents. Forks are appropriate when many parallel workers need the same
 base context and their directives are the only thing that differs.
 
+**Teammate mode:** The agent runs in a separate terminal pane (tmux or iTerm split).
+Communication is file-based: the parent writes a task file to a mailbox path; the
+teammate reads it, executes, and writes results back. No shared process tree. Best
+for long-running background workers that need to run while the user continues working
+in the main session. Cost: separate context window, no cache sharing with the parent.
+
+**Worktree mode:** Each agent receives its own git worktree — an independent working
+copy on a separate branch. Agents can edit files concurrently without conflict.
+Isolation is at the filesystem and git level, not just the context level. Use this
+when multiple implementation workers need to touch the same codebase simultaneously.
+The results merge back when each worker's branch is complete.
+
+| Mode | Process | Cache sharing | Best for |
+|------|---------|--------------|---------|
+| Fork | Child of parent | Yes — byte-identical prefix | Parallel tasks with shared context |
+| Teammate | Separate, file mailbox | No | Long-running background workers |
+| Worktree | Separate, isolated branch | No | Concurrent implementation on same codebase |
+
 > **Key insight:** The forensic-accounting-toolkit orchestrator is a pure coordinator.
 > The `orchestrator_agent.py` script only uses `Read` and `Bash` (for `gh` CLI) —
 > it reads scratchpad files and creates GitHub issues. It never directly runs `pytest`,
@@ -335,6 +353,85 @@ async with ClaudeSDKClient(options=options) as client:
 
 ---
 
+## Mental Model #13 — CLAUDE.md Is a Live Control Plane, Not an Init File
+
+The framework re-reads the CLAUDE.md hierarchy on *every turn*, not once at session
+start. This is not a performance detail — it is an architectural consequence with
+practical implications.
+
+The four-tier hierarchy (resolved in order):
+
+1. `~/.claude/CLAUDE.md` — global rules, applies to all projects
+2. `./CLAUDE.md` — project-level rules, checked into the repo
+3. `.claude/rules/*.md` — module-level rules, scoped to specific areas
+4. `CLAUDE.local.md` — local override, not committed (gitignored)
+
+Total capacity: ~40,000 characters across all tiers. Most projects use less than 1%.
+
+> **Key insight:** The connection to Mental Model #7 is direct. `CONTEXT.md` is loaded
+> explicitly in code (`Path("scripts/agents/CONTEXT.md").read_text()`). CLAUDE.md tiers
+> are loaded by the framework itself. If your static context fits in the project-level
+> CLAUDE.md, the framework handles the loading on every turn — you do not need to wire
+> it in every agent script. The two mechanisms are equivalent for caching purposes;
+> CLAUDE.md simply delegates the loading responsibility upward.
+
+The per-turn re-reading also means mid-session configuration changes take effect
+immediately on the next message. If you update CLAUDE.md during a long orchestration
+run, the change is live — there is no need to restart the session.
+
+---
+
+## Mental Model #14 — Design for Interruptibility, Not Just Completion
+
+The full pipeline is implemented as an async generator. When you press Escape, only
+the current generation stream is cancelled. The agent's context window, its accumulated
+tool results, and all prior conversation turns remain intact. The interrupt is a clean
+boundary, not a state reset.
+
+This has a non-obvious implication for orchestration design: **partial completion is
+recoverable**. A coordinator that has dispatched three workers and received two results
+does not need to restart from scratch if the third is interrupted. It can resume from
+exactly the state after the second result.
+
+> **Key insight:** The corollary for orchestration design: break long pipelines into
+> explicit phases with observable intermediate state (Mental Model #10 — scratchpad).
+> An interrupted pipeline can always be resumed from its last committed scratchpad
+> output. A pipeline that holds all state in-memory loses everything on interrupt.
+
+---
+
+## Operational Notes — Context and Session Management
+
+These are not orchestration principles but are underused capabilities that directly
+affect long-running agent systems.
+
+**Use `/compact` as a manual save, not a last resort.**
+
+Five compression strategies run automatically: microcompact (prunes old tool results),
+context collapse (summarises a conversation window), session memory extraction (saves
+key context to file), full compact (entire history summary), and PTL truncation (drops
+oldest message groups). The system applies these when approaching the context limit.
+
+The problem with waiting: automatic compression prioritises by recency and perceived
+importance — which may not match what *you* need to preserve. Trigger `/compact`
+deliberately before context-critical transitions (e.g., before starting a new phase
+of a long implementation, or before the verification step that needs specific earlier
+context). Think of it as a manual save point in a long game, not an emergency measure.
+
+**Use `--fork-session` to branch from a past conversation state.**
+
+Every session is stored as JSONL. Three flags:
+- `--continue`: resume the most recent session
+- `--resume <id>`: resume a specific session by ID
+- `--fork-session <id>`: create a new branch from a specific point in a past session
+
+`--fork-session` is the underused one. If an orchestration run took a wrong direction
+at step 4 of 10, you do not need to rerun steps 1-3. Fork from the step-3 checkpoint
+and take the alternate path. This is equivalent to a git branch — the original session
+is preserved unchanged.
+
+---
+
 ## Summary Checklist
 
 Before designing or extending any multi-agent system, verify:
@@ -351,8 +448,13 @@ Before designing or extending any multi-agent system, verify:
 - [ ] Every complex task follows: Research → Synthesis (coordinator only) → Implementation → Verification
 - [ ] Failed workers are continued, not replaced
 - [ ] Hard escalation triggers are written into every agent's system prompt
+- [ ] Execution model is chosen explicitly: fork (cache-sharing), teammate (background), or worktree (concurrent edits)
+- [ ] CLAUDE.md tiers are used for static context where possible — the framework loads them every turn without code wiring
+- [ ] Long pipelines store intermediate state to scratchpad so they can be resumed after an interrupt
+- [ ] `/compact` is triggered before context-critical phase transitions, not only when the window is full
 
 ---
 
 *Source: Anthropic internal production code — coordinatorMode.ts, AgentTool/prompt.ts, forkSubagent.ts*
+*Additional source: analysis of leaked Claude Code source (~510k lines), via unclejobs.ai thread, 2026-03-31*
 *Applied: forensic-accounting-toolkit agent team deployment, 2026-03-31*
