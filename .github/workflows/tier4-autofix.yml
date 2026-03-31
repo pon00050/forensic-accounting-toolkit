@@ -276,8 +276,10 @@ jobs:
               })
           )
 
-          # Auto-merge low-risk categories (doc drift, count sync) — no logic change
-          LOW_RISK = {"DOC_DRIFT", "COUNT_DRIFT"}
+          # Auto-merge all categories that passed the independent verify_agent gate.
+          # STUB (new tests) and TEST_FAIL (source fixes) are safe to auto-merge
+          # because verify_agent already ran the full test suite independently.
+          LOW_RISK = {"DOC_DRIFT", "COUNT_DRIFT", "STUB", "TEST_FAIL", "CONVENTION_DRIFT"}
           if category in LOW_RISK and pr_url.startswith("https://"):
               merge = subprocess.run([
                   "gh", "pr", "merge", pr_url,
