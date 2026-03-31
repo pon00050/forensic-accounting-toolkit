@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# scripts/agents/enrich-cases.sh
+# scripts/enrich-cases.sh
 # Headless agent: enriches FSS/SFC enforcement cases with DART matches and Claude analysis.
 #
 # Usage:
-#   bash scripts/agents/enrich-cases.sh
+#   bash scripts/enrich-cases.sh
 #
 # Requires: ANTHROPIC_API_KEY and DART_API_KEY in environment or .env
 # Output: JSON summary to stdout
 
 set -euo pipefail
 
-HUB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+HUB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CASES_DIR="$(cd "$HUB_DIR/../kr-enforcement-cases" 2>/dev/null && pwd)" || {
     echo "ERROR: kr-enforcement-cases not found at $HUB_DIR/../kr-enforcement-cases" >&2
     exit 1

@@ -12,10 +12,10 @@ Thirteen repos across four layers. Each is an independent git repo.
 
 | Project | Path | Purpose | Tests |
 |---------|------|---------|-------|
-| **kr-company-registry** | `../kr-company-registry` | DART↔KRX↔BRN↔CRN identifier crosswalk (3,948 companies) | 18 |
+| **kr-company-registry** | `../kr-company-registry` | DART↔KRX↔BRN↔CRN identifier crosswalk (3,949 companies) | 18 |
 | **kr-trading-calendar** | `../kr-trading-calendar` | KRX trading-day math (holidays, offsets, ranges) | 13 |
 | **kr-beneish** | `../kr-beneish` | Beneish M-Score for Korean IFRS companies | 61 |
-| **jfia-catalog** | `../jfia-catalog` | 469 JFIA forensic accounting articles (structured JSON) | — |
+| **jfia-catalog** | `../jfia-catalog` | 469 JFIA forensic accounting articles (structured JSON) | 8 |
 
 ### Analysis Libraries (standalone, consume data files not code)
 
@@ -206,6 +206,85 @@ All hooks live in `.claude/hooks/` and are wired in `.claude/settings.json`.
 ### What is NOT automated (by design)
 
 The actual **write** step — updating hub CLAUDE.md and ECOSYSTEM.md with corrected counts — is not auto-applied. Hooks warn; humans (or `/done`) confirm and commit. This prevents silent auto-edits from writing wrong counts mid-session before tests are finalised.
+
+---
+
+## Documentation Model
+
+Every doc in the ecosystem falls into exactly one of three layers:
+
+| Layer | What | Where | Git-tracked? |
+|-------|------|-------|-------------|
+| **1. Repo-local public** | CLAUDE.md, README.md, `docs/` (API docs), `reports/` (run logs), `articles/` (learning content) | Each repo | Yes |
+| **2. Hub domain knowledge** | Regulatory, business, legal, competitive, stakeholder, strategic analysis | `knowledge/` (this hub only) | No (gitignored) |
+| **3. Hub operational** | ECOSYSTEM.md, WORKFLOW.md, ARCHITECTURE.md, cross-issues/, content/captures/ | Hub root | Yes |
+
+**Decision tree — "Where does this doc go?"**
+- Needed to understand/use the code in one specific repo? → Layer 1 (that repo's `docs/` or `reports/`)
+- Domain knowledge (regulatory, business, legal, market, strategy)? → Layer 2 (hub `knowledge/`)
+- Cross-project coordination? → Layer 3 (hub root)
+
+Repos do **not** maintain local `knowledge/` directories. All domain knowledge lives exclusively in the hub vault.
+
+## Knowledge Vault
+
+Domain knowledge for the ecosystem lives in `knowledge/` (gitignored — private business intelligence). This is the **canonical hub vault**: the single maintained copy that covers all 13 repos.
+
+### What belongs in the hub vault
+
+- Regulatory analysis (FSC/FSS/FSCMA/CPA Act, enforcement patterns)
+- Business intelligence (buyer dossiers, competitive landscape, channel analysis, pricing)
+- Legal compliance research (신용정보법, KOGL, DART ToS, PIPA)
+- Market intelligence (positioning, funding programs, monetization models)
+- Strategic hypotheses (research agenda, publication potential)
+- Build decision logs with cross-project value (pattern: `knowledge/context/technical/`)
+
+### Frontmatter contract (gold standard)
+
+```yaml
+---
+name: <Human-readable title>
+description: <One sentence — substantive, not generic>
+type: context    # or: hypothesis, bridge
+domain: market-intelligence | regulatory | legal-compliance | technical | data-sources
+tags: [tag1, tag2, tag3]
+created: YYYY-MM-DD
+last_verified: YYYY-MM-DD
+related:
+  - "[[other-note-stem]]"
+---
+```
+
+### Navigation
+
+- **Map of Content:** `knowledge/_index.md` — 4 question-based reading paths
+- **Freshness:** notes are flagged at session start if `last_verified` > 90 days old
+- **Drift check:** session end hook warns if a repo has knowledge files not mirrored to hub
+
+---
+
+## Hard Rules (Non-Negotiable)
+
+### Data Integrity
+- **Never modify raw DART/KRX data files.** `data/raw/` is immutable.
+- **Never mix K-GAAP and K-IFRS numbers** in the same analysis. Always check the accounting standard.
+- **Never extrapolate M-score** beyond the calibrated threshold. Report probability, not a verdict.
+- **Split-adjustments must be applied** before any price-based ratio calculation. Use `kr-trading-calendar` for split dates.
+
+### Code Quality
+- **Always run tests before committing**: `uv run pytest tests/ -q`. All tests must pass.
+- **Never modify test files to make them pass.** Fix the source code.
+- **Never hardcode ticker symbols or company names.** Use the constants module.
+- **All DART API calls must go through the retry wrapper.** Never call the API directly.
+
+### Triage System
+- **Never duplicate triage-scan.sh logic** in move-forward skills. Call it as a subprocess and wrap output.
+- **triage-last.json** is updated by triage-scan.sh. Do not edit it manually.
+- **outreach-tracker.md** in `knowledge/business/` is the authoritative record for all client contacts.
+
+### Publication Rules
+- All repos are fully public. Never publish client-specific analysis to these repos.
+- Version tags follow semver.
 
 ---
 

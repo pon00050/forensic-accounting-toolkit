@@ -14,6 +14,10 @@
           {
             "type": "command",
             "command": "python -c \"import os, glob, time; files=glob.glob('../krff-shell/01_Data/processed/*.parquet'); stale=[(os.path.basename(f), int((time.time()-os.path.getmtime(f))/86400)) for f in files if time.time()-os.path.getmtime(f)>14*86400]; [print(f'STALE PARQUET: {n} ({d}d old) — consider uv run krff run') for n,d in stale]; print('All parquets fresh.') if not stale and files else None\" 2>/dev/null || true"
+          },
+          {
+            "type": "command",
+            "command": "bash C:/Users/pon00/Projects/forensic-accounting-toolkit/.claude/hooks/knowledge-freshness-check.sh"
           }
         ]
       }
@@ -76,6 +80,10 @@
           {
             "type": "command",
             "command": "bash C:/Users/pon00/Projects/forensic-accounting-toolkit/.claude/hooks/stop-doc-drift-scan.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash C:/Users/pon00/Projects/forensic-accounting-toolkit/.claude/hooks/knowledge-drift-check.sh"
           }
         ]
       }

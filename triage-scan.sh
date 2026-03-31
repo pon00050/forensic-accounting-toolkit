@@ -530,4 +530,116 @@ else
 fi
 echo ""
 
+# ─────────────────────────────────────────────
+# SOURCE 9: Knowledge Vault (full mode only)
+# ─────────────────────────────────────────────
+if [ "$MODE" = "full" ]; then
+echo "--- KNOWLEDGE VAULT ---"
+KNOWLEDGE_DIR="$HUB/knowledge"
+TODAY_EPOCH=$(date +%s)
+STALE_DAYS=90
+MOC_STALE_DAYS=30
+
+if [ ! -d "$KNOWLEDGE_DIR" ]; then
+    echo "  [MISSING] knowledge/ directory not found — run /vault-housekeeping to create vault"
+    echo ""
+else
+    # Count notes by domain
+    total=0
+    declare -A domain_counts
+    while IFS= read -r f; do
+        type_val=$(awk '/^---/{c++; if(c==2) exit} c==1 && /^type:/{print $2}' "$f" 2>/dev/null)
+        [ "$type_val" = "redirect" ] && continue
+        domain_val=$(awk '/^---/{c++; if(c==2) exit} c==1 && /^domain:/{print $2}' "$f" 2>/dev/null)
+        domain_val="${domain_val:-uncategorized}"
+        domain_counts[$domain_val]=$(( ${domain_counts[$domain_val]:-0} + 1 ))
+        total=$(( total + 1 ))
+    done < <(find "$KNOWLEDGE_DIR" -name "*.md" ! -name "_index.md" 2>/dev/null)
+
+    domain_summary=""
+    for d in "${!domain_counts[@]}"; do
+        domain_summary="${domain_summary} ${d}:${domain_counts[$d]}"
+    done
+
+    echo "  Total notes: $total ($domain_summary)"
+
+    # MOC freshness
+    MOC_FILE="$KNOWLEDGE_DIR/_index.md"
+    if [ -f "$MOC_FILE" ]; then
+        last_updated=$(awk '/^---/{c++; if(c==2) exit} c==1 && /^last_updated:/{print $2}' "$MOC_FILE" 2>/dev/null)
+        if [ -n "$last_updated" ]; then
+            moc_epoch=$(date -d "$last_updated" +%s 2>/dev/null || date -j -f "%Y-%m-%d" "$last_updated" +%s 2>/dev/null)
+            if [ -n "$moc_epoch" ]; then
+                moc_age=$(( (TODAY_EPOCH - moc_epoch) / 86400 ))
+                if [ "$moc_age" -gt "$MOC_STALE_DAYS" ]; then
+                    echo "  MOC: _index.md last updated $last_updated ($moc_age days ago) [SUGGEST] Run /vault-housekeeping"
+                else
+                    echo "  MOC: _index.md last updated $last_updated ($moc_age days ago) [OK]"
+                fi
+            fi
+        fi
+    else
+        echo "  MOC: _index.md missing [WARN] Run /create-moc"
+    fi
+
+    # Freshness check (stale > 90 days)
+    stale_count=0
+    stale_oldest_age=0
+    stale_oldest_file=""
+    while IFS= read -r f; do
+        type_val=$(awk '/^---/{c++; if(c==2) exit} c==1 && /^type:/{print $2}' "$f" 2>/dev/null)
+        [ "$type_val" = "redirect" ] && continue
+        last_verified=$(awk '/^---/{c++; if(c==2) exit} c==1 && /^last_verified:/{print $2}' "$f" 2>/dev/null)
+        [ -z "$last_verified" ] && continue
+        fepoch=$(date -d "$last_verified" +%s 2>/dev/null || date -j -f "%Y-%m-%d" "$last_verified" +%s 2>/dev/null)
+        [ -z "$fepoch" ] && continue
+        age=$(( (TODAY_EPOCH - fepoch) / 86400 ))
+        if [ "$age" -gt "$STALE_DAYS" ]; then
+            stale_count=$(( stale_count + 1 ))
+            if [ "$age" -gt "$stale_oldest_age" ]; then
+                stale_oldest_age=$age
+                stale_oldest_file="${f#$KNOWLEDGE_DIR/}"
+            fi
+        fi
+    done < <(find "$KNOWLEDGE_DIR" -name "*.md" ! -name "_index.md" 2>/dev/null)
+
+    if [ "$stale_count" -gt 0 ]; then
+        echo "  Freshness: $stale_count note(s) stale (>$STALE_DAYS days) [WARN] oldest: $stale_oldest_file ($stale_oldest_age d)"
+    else
+        echo "  Freshness: all notes fresh (<$STALE_DAYS days) [OK]"
+    fi
+
+    # Drift check: repo knowledge files not mirrored to hub
+    source "$HUB/ecosystem.conf" 2>/dev/null || true
+    declare -A hub_stems
+    while IFS= read -r hf; do
+        stem=$(basename "$hf" .md | tr '[:upper:]' '[:lower:]')
+        hub_stems[$stem]=1
+    done < <(find "$KNOWLEDGE_DIR" -name "*.md" 2>/dev/null)
+
+    drift_count=0
+    for repo in "${ALL_REPOS[@]:-}"; do
+        [ "$repo" = "forensic-accounting-toolkit" ] && continue
+        repo_path="$BASE/$repo"
+        [ ! -d "$repo_path" ] && continue
+        for subdir in "knowledge/context" "knowledge/hypotheses" "knowledge"; do
+            rdir="$repo_path/$subdir"
+            [ ! -d "$rdir" ] && continue
+            while IFS= read -r rf; do
+                stem=$(basename "$rf" .md | tr '[:upper:]' '[:lower:]')
+                [ "$stem" = "_index" ] && continue
+                [ -z "${hub_stems[$stem]:-}" ] && drift_count=$(( drift_count + 1 ))
+            done < <(find "$rdir" -maxdepth 2 -name "*.md" 2>/dev/null)
+        done
+    done
+
+    if [ "$drift_count" -gt 0 ]; then
+        echo "  Drift: $drift_count repo knowledge file(s) not mirrored to hub [WARN] Run /knowledge-sync"
+    else
+        echo "  Drift: 0 unmirrored files [OK]"
+    fi
+fi
+echo ""
+fi
+
 echo "--- END (full scan) ---"

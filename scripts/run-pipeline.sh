@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# scripts/agents/run-pipeline.sh
+# scripts/run-pipeline.sh
 # Headless agent: runs the full krff-shell (kr-dart-pipeline) ETL pipeline with validation.
 #
 # Usage:
-#   bash scripts/agents/run-pipeline.sh              # full run
-#   bash scripts/agents/run-pipeline.sh --sample 20  # sample mode (fast)
-#   bash scripts/agents/run-pipeline.sh --stage dart # single stage
+#   bash scripts/run-pipeline.sh              # full run
+#   bash scripts/run-pipeline.sh --sample 20  # sample mode (fast)
+#   bash scripts/run-pipeline.sh --stage dart # single stage
 #
 # The agent will: extract → transform → analyze → copy-parquets → validate → report.
 # Output: JSON summary to stdout, errors to stderr.
@@ -14,7 +14,7 @@
 
 set -euo pipefail
 
-HUB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+HUB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 KRFF_DIR="$(cd "$HUB_DIR/../krff-shell" 2>/dev/null && pwd)" || {
     echo "ERROR: krff-shell not found at ../krff-shell" >&2
     exit 1
