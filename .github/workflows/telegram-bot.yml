@@ -24,7 +24,8 @@ jobs:
       - name: Get last processed update_id
         id: last_id
         env:
-          GH_TOKEN: ${{ github.token }}
+          # ECOSYSTEM_PAT has repo scope — required for variable read/write
+          GH_TOKEN: ${{ secrets.ECOSYSTEM_PAT }}
         run: |
           LAST=$(gh variable get TELEGRAM_LAST_UPDATE_ID 2>/dev/null || echo "0")
           if ! echo "$LAST" | grep -qE '^[0-9]+$'; then LAST="0"; fi
@@ -35,7 +36,8 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          GH_TOKEN: ${{ github.token }}
+          # ECOSYSTEM_PAT needed for gh variable set (repo scope)
+          GH_TOKEN: ${{ secrets.ECOSYSTEM_PAT }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           LAST_UPDATE_ID: ${{ steps.last_id.outputs.last_update_id }}
         run: |
