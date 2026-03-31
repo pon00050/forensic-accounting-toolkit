@@ -35,7 +35,10 @@ for repo in "${REPOS[@]}"; do
     repo_path="$PARENT/$repo"
     [ -d "$repo_path" ] || continue
 
-    # Search .md, .toml, .conf files; exclude reports/ and backtick spans
+    # Search .md, .toml, .conf files; exclude:
+    #   reports/       — historical session logs
+    #   CHANGELOG.md   — audit trail, will always contain historical mentions
+    #   skills/        — skill files contain the old name as grep detection patterns
     while IFS= read -r match; do
         # Skip files under reports/ (historical session logs)
         if echo "$match" | grep -q "/reports/"; then
@@ -45,8 +48,12 @@ for repo in "${REPOS[@]}"; do
         filepath="${match%%:*}"
         linenum=$(echo "$match" | cut -d: -f2)
         linetext=$(echo "$match" | cut -d: -f3-)
-        # Skip if the match is inside a backtick span (inline code)
+        # Skip if the match is inside a backtick span (inline code reference)
         if echo "$linetext" | grep -qP '`[^`]*kr-forensic-finance[^`]*`'; then
+            continue
+        fi
+        # Skip if the match is inside double quotes (grep pattern or documentation string)
+        if echo "$linetext" | grep -qP '"[^"]*kr-forensic-finance[^"]*"'; then
             continue
         fi
         # Skip lines explicitly about the old name (meta-references)
@@ -54,7 +61,11 @@ for repo in "${REPOS[@]}"; do
             continue
         fi
         FINDINGS+=("{\"repo\":\"$repo\",\"file\":\"$filepath\",\"line\":$linenum,\"text\":$(echo "$linetext" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().strip()))')}")
-    done < <(grep -rn --include="*.md" --include="*.toml" --include="*.conf" \
+    done < <(grep -rn \
+        --include="*.md" --include="*.toml" --include="*.conf" \
+        --exclude="CHANGELOG.md" \
+        --exclude-dir="skills" \
+        --exclude-dir="reports" \
         "kr-forensic-finance" "$repo_path" 2>/dev/null || true)
 done
 

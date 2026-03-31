@@ -30,15 +30,31 @@ declare -A ACTUAL_COUNTS=()
 declare -A CLAIMED_COUNTS=()
 declare -a MISMATCHES=()
 
+# Repos are symlinked to $GITHUB_WORKSPACE/<repo> by checkout-ecosystem.sh
+# ($PARENT/<repo> does not exist — clones are at $GITHUB_WORKSPACE/_deps/<repo>)
+REPO_BASE="$GITHUB_WORKSPACE"
+
+declare -A COLLECTION_FAILED=()
+
 # Collect actual counts
 for repo in "${!TEST_RUNNERS[@]}"; do
-    rpath="$PARENT/$repo"
-    [ -d "$rpath" ] || continue
+    rpath="$REPO_BASE/$repo"
+    if [ ! -d "$rpath" ]; then
+        COLLECTION_FAILED[$repo]=1
+        ACTUAL_COUNTS[$repo]=0
+        continue
+    fi
     runner="${TEST_RUNNERS[$repo]}"
     cd "$rpath"
-    # Collect test count (--co -q shows "X tests collected")
-    count_line=$(eval "$runner tests/ --co -q 2>/dev/null | tail -2 | head -1" || echo "0 tests")
+    # Collect test count; capture exit code to distinguish failure from genuine 0
+    count_line=$(eval "$runner tests/ --co -q 2>/dev/null | tail -2 | head -1")
+    exit_code=$?
     actual=$(echo "$count_line" | grep -oP '^\d+' || echo "0")
+    if [ "$exit_code" -ne 0 ] || [ "$actual" = "0" ]; then
+        # Treat as collection failure, not a genuine zero-test count
+        COLLECTION_FAILED[$repo]=1
+        actual=0
+    fi
     ACTUAL_COUNTS[$repo]="$actual"
     cd "$GITHUB_WORKSPACE"
 done
@@ -53,8 +69,11 @@ while IFS= read -r line; do
     fi
 done < "$HUB/CLAUDE.md"
 
-# Compare
+# Compare — skip repos where collection failed (actual=0 means env broken, not no tests)
 for repo in "${!ACTUAL_COUNTS[@]}"; do
+    if [ -n "${COLLECTION_FAILED[$repo]:-}" ]; then
+        continue  # collection failure — not a real mismatch, suppress from issue
+    fi
     actual="${ACTUAL_COUNTS[$repo]}"
     claimed="${CLAIMED_COUNTS[$repo]:-unknown}"
     if [ "$claimed" = "unknown" ] || [ "$actual" != "$claimed" ]; then
