@@ -1,0 +1,268 @@
+name: "Telegram Bot — Command Router"
+
+# Polls every 5 minutes for commands from the authorized Telegram chat.
+# Dispatches the appropriate workflow and ACKs immediately.
+# Stores last processed update_id as a GitHub Actions variable.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write   # required for gh variable set/get
+  contents: read
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4   # must complete before next cron fires
+    steps:
+      - name: Checkout hub
+        uses: actions/checkout@v4
+
+      - name: Get last processed update_id
+        id: last_id
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          LAST=$(gh variable get TELEGRAM_LAST_UPDATE_ID 2>/dev/null || echo "0")
+          if ! echo "$LAST" | grep -qE '^[0-9]+$'; then LAST="0"; fi
+          echo "last_update_id=$LAST" >> $GITHUB_OUTPUT
+          echo "Last update_id: $LAST"
+
+      - name: Poll Telegram and route commands
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          LAST_UPDATE_ID: ${{ steps.last_id.outputs.last_update_id }}
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "Telegram secrets not configured — skipping"
+            exit 0
+          fi
+          python3 - <<'PYEOF'
+          import json
+          import os
+          import subprocess
+          import sys
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          TOKEN        = os.environ["TELEGRAM_BOT_TOKEN"]
+          ALLOWED_CHAT = str(os.environ["TELEGRAM_CHAT_ID"]).strip()
+          REPO         = os.environ["GITHUB_REPOSITORY"]
+          LAST_ID      = int(os.environ.get("LAST_UPDATE_ID", "0"))
+
+          # ── Telegram helpers ─────────────────────────────────────────────────
+
+          def tg_get(method, params=None):
+              url = f"https://api.telegram.org/bot{TOKEN}/{method}"
+              if params:
+                  url += "?" + urllib.parse.urlencode(params)
+              try:
+                  with urllib.request.urlopen(url, timeout=10) as r:
+                      return json.loads(r.read())
+              except Exception as e:
+                  print(f"[tg] GET {method} failed: {e}", file=sys.stderr)
+                  return None
+
+          def tg_send(chat_id, text):
+              data = urllib.parse.urlencode({
+                  "chat_id": chat_id, "text": text,
+                  "parse_mode": "Markdown",
+                  "disable_web_page_preview": "true",
+              }).encode()
+              try:
+                  with urllib.request.urlopen(
+                      urllib.request.Request(
+                          f"https://api.telegram.org/bot{TOKEN}/sendMessage", data=data
+                      ), timeout=10
+                  ) as r:
+                      return json.loads(r.read())
+              except Exception as e:
+                  print(f"[tg] sendMessage failed: {e}", file=sys.stderr)
+                  return None
+
+          # ── GitHub helpers ───────────────────────────────────────────────────
+
+          def gh_workflow_run(workflow_file):
+              r = subprocess.run(
+                  ["gh", "workflow", "run", workflow_file, "--repo", REPO],
+                  capture_output=True, text=True,
+              )
+              return r.returncode == 0, r.stderr.strip()
+
+          def gh_set_variable(name, value):
+              subprocess.run(
+                  ["gh", "variable", "set", name, "--body", str(value), "--repo", REPO],
+                  capture_output=True,
+              )
+
+          # ── /status — reads latest orchestrator artifact ─────────────────────
+
+          def get_status_summary():
+              try:
+                  r = subprocess.run([
+                      "gh", "api",
+                      f"repos/{REPO}/actions/artifacts?name=scratchpad-orchestrator&per_page=1",
+                      "--jq", ".artifacts[0].id // empty",
+                  ], capture_output=True, text=True)
+                  artifact_id = r.stdout.strip()
+                  if not artifact_id:
+                      return "No orchestrator run yet. Send /orchestrate to generate a report."
+
+                  subprocess.run([
+                      "gh", "api",
+                      f"repos/{REPO}/actions/artifacts/{artifact_id}/zip",
+                      "--header", "Accept: application/vnd.github.v3+json",
+                  ], capture_output=True,
+                     stdout=open("/tmp/orch_artifact.zip", "wb"))
+
+                  subprocess.run(
+                      ["unzip", "-o", "/tmp/orch_artifact.zip", "-d", "/tmp/orch/"],
+                      capture_output=True,
+                  )
+
+                  # Try health_summary.json first (written by orchestrator.yml)
+                  summary_path = Path("/tmp/orch/health_summary.json")
+                  if summary_path.exists():
+                      s = json.loads(summary_path.read_text())
+                      score = float(s.get("health", 0)) if str(s.get("health", "0")).replace(".", "").isdigit() else 0
+                      emoji = "✅" if score >= 8 else "⚠️" if score >= 5 else "🚨"
+                      lines = [
+                          f"{emoji} *Health: {s.get('health','?')}/10*",
+                          f"P0/P1: {s.get('p0p1_count','?')} | Needs human: {s.get('needs_human_count','?')}",
+                          f"Date: {s.get('date','?')}",
+                      ]
+                      if s.get("issue_url"):
+                          lines.append(f"[Full report]({s['issue_url']})")
+                      return "\n".join(lines)
+
+                  # Fallback: orchestrator.json
+                  orch_path = Path("/tmp/orch/orchestrator.json")
+                  if orch_path.exists():
+                      d = json.loads(orch_path.read_text())
+                      health = d.get("ecosystem_health_score", "?")
+                      p0p1 = len([b for b in d.get("action_briefs", []) if b.get("priority") in ("P0","P1")])
+                      return f"Health: {health}/10\nP0/P1 items: {p0p1}\n_(run /orchestrate to refresh)_"
+
+                  return "Status artifact found but unreadable. Run /orchestrate to refresh."
+              except Exception as e:
+                  return f"Status fetch error: {e}"
+
+          # ── Help text ────────────────────────────────────────────────────────
+
+          HELP_TEXT = (
+              "*Forensic Toolkit Agent Team*\n\n"
+              "Commands:\n"
+              "/status — latest ecosystem health score\n"
+              "/triage — run triage scan (~2 min)\n"
+              "/test — run all 11 repo test suites (~10 min)\n"
+              "/work — pick top AI task and execute it (~20 min)\n"
+              "/orchestrate — full coordinator run (~5 min)\n"
+              "/help — this message"
+          )
+
+          # ── Command router ───────────────────────────────────────────────────
+
+          def route(cmd, chat_id):
+              cmd = cmd.strip().split("@")[0].lower()  # strip bot mention
+
+              if cmd in ("/help", "/start"):
+                  tg_send(chat_id, HELP_TEXT)
+
+              elif cmd == "/status":
+                  tg_send(chat_id, "Fetching status...")
+                  tg_send(chat_id, get_status_summary())
+
+              elif cmd == "/triage":
+                  ok, err = gh_workflow_run("tier2-triage.yml")
+                  if ok:
+                      tg_send(chat_id, "Triage started. Results in ~2 min.")
+                  else:
+                      tg_send(chat_id, f"Dispatch failed: {err[:200]}")
+
+              elif cmd == "/test":
+                  ok, err = gh_workflow_run("tier1-tests.yml")
+                  if ok:
+                      tg_send(chat_id, "Tests running across 11 repos. Results in ~10 min.")
+                  else:
+                      tg_send(chat_id, f"Dispatch failed: {err[:200]}")
+
+              elif cmd in ("/work", "/orchestrate"):
+                  ok, err = gh_workflow_run("orchestrator.yml")
+                  if ok:
+                      label = "Work session" if cmd == "/work" else "Orchestrator"
+                      tg_send(chat_id, f"{label} started. Full report in ~5 min.")
+                  else:
+                      tg_send(chat_id, f"Dispatch failed: {err[:200]}")
+
+              else:
+                  tg_send(chat_id, f"Unknown: `{cmd}`\nSend /help for commands.")
+
+          # ── Main ─────────────────────────────────────────────────────────────
+
+          # Bootstrap: first run with no stored update_id.
+          # Mark the current tip without processing old messages.
+          if LAST_ID == 0:
+              resp = tg_get("getUpdates", {"offset": -1, "limit": 1, "timeout": 0})
+              if resp and resp.get("ok") and resp["result"]:
+                  tip_id = resp["result"][-1]["update_id"]
+                  gh_set_variable("TELEGRAM_LAST_UPDATE_ID", str(tip_id))
+                  print(f"[bootstrap] Marked tip update_id={tip_id}. Ready.")
+              else:
+                  gh_set_variable("TELEGRAM_LAST_UPDATE_ID", "1")
+                  print("[bootstrap] No updates. Initialized to 1.")
+              sys.exit(0)
+
+          # Normal poll: fetch updates after LAST_ID
+          resp = tg_get("getUpdates", {
+              "offset": LAST_ID + 1,
+              "limit": 10,
+              "timeout": 0,
+          })
+
+          if not resp or not resp.get("ok"):
+              print(f"[poll] getUpdates failed: {resp}", file=sys.stderr)
+              sys.exit(0)
+
+          updates = resp.get("result", [])
+          print(f"[poll] {len(updates)} update(s) since update_id={LAST_ID}")
+
+          new_max_id = LAST_ID
+          processed = 0
+
+          for update in updates:
+              uid = update.get("update_id", 0)
+              new_max_id = max(new_max_id, uid)
+
+              msg = update.get("message", {})
+              if not msg:
+                  continue
+
+              chat_id = str(msg.get("chat", {}).get("id", ""))
+              text    = msg.get("text", "").strip()
+
+              # Security: only respond to the authorized chat
+              if chat_id != ALLOWED_CHAT:
+                  print(f"[security] Ignoring message from chat_id={chat_id}")
+                  continue
+
+              if not text.startswith("/"):
+                  continue  # not a command
+
+              print(f"[cmd] {text!r}")
+              route(text, chat_id)
+              processed += 1
+
+          # Persist new high-water mark
+          if new_max_id > LAST_ID:
+              gh_set_variable("TELEGRAM_LAST_UPDATE_ID", str(new_max_id))
+              print(f"[poll] Advanced update_id: {LAST_ID} → {new_max_id}")
+
+          print(f"[poll] Processed {processed} command(s).")
+          PYEOF

@@ -131,11 +131,11 @@ jobs:
 
           if status != "fixed" or not changed:
               print(f"Status={status} — no PR to create")
+              brief_path = workspace / "_scratchpad" / "fix-brief.json"
+              brief = json.loads(brief_path.read_text()) if brief_path.exists() else {}
+              issue_num = brief.get("issue_number")
               if status == "needs_human":
-                  # Comment on originating issue if we have an issue_number
-                  brief_path = workspace / "_scratchpad" / "fix-brief.json"
-                  brief = json.loads(brief_path.read_text()) if brief_path.exists() else {}
-                  issue_num = brief.get("issue_number")
+                  # Comment on originating issue
                   if issue_num:
                       subprocess.run([
                           "gh", "issue", "comment", str(issue_num),
@@ -143,6 +143,13 @@ jobs:
                           f"Fix agent could not auto-resolve (status=needs_human):\n\n{summary}\n\n"
                           f"Manual investigation required.",
                       ], check=False)
+              # Write signal for Telegram step
+              (workspace / "_scratchpad" / "pr-result.json").write_text(
+                  json.dumps({
+                      "status": status, "repo": repo, "summary": summary,
+                      "category": brief.get("category", ""), "changed_files": [], "pr_url": None,
+                  })
+              )
               sys.exit(0)
 
           target = workspace / "_target_repo"
@@ -215,10 +222,19 @@ jobs:
           pr_url = pr.stdout.strip() or pr.stderr.strip()
           print(f"PR: {pr_url}")
 
-          # Auto-merge low-risk categories (doc drift, count sync) — no logic change
           brief_path = workspace / "_scratchpad" / "fix-brief.json"
           brief = json.loads(brief_path.read_text()) if brief_path.exists() else {}
           category = brief.get("category", "")
+
+          # Write pr-result for Telegram and follow-up steps
+          (workspace / "_scratchpad" / "pr-result.json").write_text(
+              json.dumps({
+                  "status": "fixed", "repo": repo, "summary": summary,
+                  "category": category, "changed_files": changed, "pr_url": pr_url,
+              })
+          )
+
+          # Auto-merge low-risk categories (doc drift, count sync) — no logic change
           LOW_RISK = {"DOC_DRIFT", "COUNT_DRIFT"}
           if category in LOW_RISK and pr_url.startswith("https://"):
               merge = subprocess.run([
@@ -238,6 +254,136 @@ jobs:
                   "gh", "issue", "comment", str(issue_num),
                   "--body", f"Auto-fix PR created: {pr_url}",
               ], check=False)
+          PYEOF
+
+      - name: Telegram notification
+        if: always() && steps.parse.outputs.open_fix_prs == '0'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "Telegram not configured — skipping"
+            exit 0
+          fi
+          python3 - <<'PYEOF'
+          import json, os, urllib.parse, urllib.request
+          from pathlib import Path
+
+          token   = os.environ["TELEGRAM_BOT_TOKEN"]
+          chat_id = os.environ["TELEGRAM_CHAT_ID"]
+          ws      = Path(os.environ["GITHUB_WORKSPACE"])
+          run_url = (f"{os.environ.get('GITHUB_SERVER_URL','https://github.com')}/"
+                     f"{os.environ.get('GITHUB_REPOSITORY','')}/"
+                     f"actions/runs/{os.environ.get('GITHUB_RUN_ID','0')}")
+
+          pr_path = ws / "_scratchpad" / "pr-result.json"
+          if pr_path.exists():
+              d = json.loads(pr_path.read_text())
+          else:
+              fix_path = ws / "_scratchpad" / "fix-result.json"
+              d = json.loads(fix_path.read_text()) if fix_path.exists() else {}
+
+          status  = d.get("status", "unknown")
+          repo    = d.get("repo", "?")
+          summary = d.get("summary", "")
+          pr_url  = d.get("pr_url")
+
+          if status == "fixed" and pr_url and pr_url.startswith("https://"):
+              text = f"✅ *Autofix — {repo}*\n{summary}\n[View PR]({pr_url})"
+          elif status == "needs_human":
+              text = f"⚠️ *Needs you — {repo}*\n{summary}\n[Logs]({run_url})"
+          else:
+              text = f"ℹ️ *Tier 4 done — {repo}*\nStatus: {status}\n{summary}"
+
+          data = urllib.parse.urlencode({
+              "chat_id": chat_id, "text": text,
+              "parse_mode": "Markdown", "disable_web_page_preview": "true",
+          }).encode()
+          try:
+              with urllib.request.urlopen(
+                  urllib.request.Request(
+                      f"https://api.telegram.org/bot{token}/sendMessage", data=data
+                  ), timeout=10
+              ) as r:
+                  print("Telegram sent:", r.status)
+          except Exception as e:
+              print(f"Telegram failed (non-critical): {e}")
+          PYEOF
+
+      - name: Create follow-up tasks (Haiku)
+        if: always() && steps.parse.outputs.open_fix_prs == '0'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: |
+          python3 - <<'PYEOF'
+          import asyncio, json, os, subprocess, sys
+          from pathlib import Path
+          sys.path.insert(0, "scripts/agents")
+          from _sdk_helpers import load_context, run_agent, collect_text
+
+          ws = Path(os.environ["GITHUB_WORKSPACE"])
+          pr_path = ws / "_scratchpad" / "pr-result.json"
+          if not pr_path.exists():
+              print("No pr-result.json — skipping follow-up tasks")
+              sys.exit(0)
+
+          d = json.loads(pr_path.read_text())
+          if d.get("status") != "fixed":
+              print(f"Status={d.get('status')} — no follow-up tasks")
+              sys.exit(0)
+
+          repo     = d.get("repo", "")
+          summary  = d.get("summary", "")
+          category = d.get("category", "")
+          pr_url   = d.get("pr_url", "")
+          changed  = d.get("changed_files", [])
+
+          PROMPT = f"""
+          A Tier 4 autofix just succeeded. Create 1-2 follow-up GitHub issues
+          for work that should happen next as a direct consequence.
+
+          Fix summary:
+          - Repo: {repo}
+          - Category: {category}
+          - What was fixed: {summary}
+          - PR: {pr_url}
+          - Files changed: {json.dumps(changed)}
+
+          Rules:
+          - Exactly 1-2 issues. No more.
+          - Be specific — include repo name and what to check.
+          - Use label `agent-task` for AI-actionable, `needs-human` for human-only.
+          - Category patterns: DOC_DRIFT → scan other repos for same stale name;
+            COUNT_DRIFT → verify README counts match; TEST_FAIL → add regression test;
+            CONVENTION_DRIFT → check sibling repos for same gap; STUB → verify impl.
+
+          For each issue run (Bash tool):
+          gh issue create --repo pon00050/forensic-accounting-toolkit \\
+            --title "..." --body "..." --label "agent-task"
+
+          Then output JSON: {{"follow_up_issues": [{{"title": "...", "url": "..."}}]}}
+          """
+
+          async def main():
+              from claude_agent_sdk import ClaudeAgentOptions
+              options = ClaudeAgentOptions(
+                  system_prompt=load_context() + "\nYou create follow-up GitHub issues. Be concise.",
+                  allowed_tools=["Bash"],
+                  permission_mode="bypassPermissions",
+                  max_turns=8,
+                  max_budget_usd=0.10,
+                  model="claude-haiku-4-5-20251001",
+                  cwd=os.environ.get("GITHUB_WORKSPACE", "."),
+              )
+              msgs = await run_agent(PROMPT, options,
+                  escalation_context=f"Follow-up task creation failed for {repo}")
+              print("[follow-up]", collect_text(msgs)[-300:])
+
+          asyncio.run(main())
           PYEOF
 
       - name: Upload scratchpad

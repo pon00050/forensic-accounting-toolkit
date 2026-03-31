@@ -144,5 +144,79 @@ jobs:
               "--body", body,
               "--label", "agent:triage",
           ], capture_output=True, text=True)
-          print("Issue:", result.stdout.strip() or result.stderr.strip())
+          issue_url = result.stdout.strip() or result.stderr.strip()
+          print("Issue:", issue_url)
+
+          # Write issue URL for Telegram step
+          from pathlib import Path as P
+          P("_scratchpad/triage_issue_url.txt").write_text(issue_url)
+          PYEOF
+
+      - name: Telegram notification
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "Telegram not configured — skipping"
+            exit 0
+          fi
+          python3 - <<'PYEOF'
+          import json, os, urllib.parse, urllib.request
+          from pathlib import Path
+          from datetime import datetime, timezone
+
+          token    = os.environ["TELEGRAM_BOT_TOKEN"]
+          chat_id  = os.environ["TELEGRAM_CHAT_ID"]
+          today    = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+          triage_path = Path("_scratchpad/triage.json")
+          issue_url   = Path("_scratchpad/triage_issue_url.txt")
+          url_str     = issue_url.read_text().strip() if issue_url.exists() else ""
+
+          if not triage_path.exists():
+              text = "Triage ran but produced no output."
+          else:
+              data    = json.loads(triage_path.read_text())
+              actions = data.get("ranked_actions", [])
+              summary = data.get("summary", {})
+
+              top3  = actions[:3]
+              items = []
+              for a in top3:
+                  flag = " (human)" if not a.get("ai_actionable", True) else ""
+                  items.append(
+                      f"[{a.get('priority','?')}] {a.get('repo','?')}: "
+                      f"{a.get('description','')[:70]}{flag}"
+                  )
+              items_text = "\n".join(items) or "No actions."
+
+              clean = summary.get("clean_repos", "?")
+              total = summary.get("total_repos", 13)
+              emoji = "✅" if str(clean) == str(total) else "⚠️"
+
+              text = (
+                  f"{emoji} *Triage — {today}*\n"
+                  f"Clean: {clean}/{total} repos\n\n"
+                  f"*Top actions:*\n{items_text}"
+              )
+              if url_str.startswith("https://"):
+                  text += f"\n\n[Full report]({url_str})"
+
+          data_enc = urllib.parse.urlencode({
+              "chat_id": chat_id, "text": text,
+              "parse_mode": "Markdown",
+              "disable_web_page_preview": "true",
+          }).encode()
+          try:
+              with urllib.request.urlopen(
+                  urllib.request.Request(
+                      f"https://api.telegram.org/bot{token}/sendMessage",
+                      data=data_enc,
+                  ), timeout=10
+              ) as r:
+                  print("Telegram sent:", r.status)
+          except Exception as e:
+              print(f"Telegram failed (non-critical): {e}")
           PYEOF
