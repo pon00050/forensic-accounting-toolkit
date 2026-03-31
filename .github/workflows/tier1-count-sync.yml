@@ -8,7 +8,7 @@ on:
 
 permissions:
   issues: write
-  contents: read
+  contents: write
 
 jobs:
   count-sync:
@@ -29,8 +29,6 @@ jobs:
             git clone --depth=1 "https://github.com/pon00050/$repo.git" "_deps/$repo" 2>/dev/null || \
             echo "Warning: could not clone $repo"
           done
-          # Platform repos need kr-forensic-core
-          git clone --depth=1 "https://github.com/pon00050/kr-forensic-core.git" "_deps_extra/kr-forensic-core" 2>/dev/null || true
 
       - name: Symlink repos
         run: bash scripts/ci/checkout-ecosystem.sh
@@ -39,7 +37,7 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Install uv for all repos
+      - name: Install deps for all repos
         run: |
           REPOS=(
             kr-trading-calendar kr-beneish kr-derivatives jfia-forensic
@@ -68,7 +66,37 @@ jobs:
           path: _scratchpad/count-sync.json
           retention-days: 90
 
-      - name: Create issue if mismatch found
+      - name: Auto-fix CLAUDE.md counts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: |
+          if python3 scripts/ci/autofix-count-sync.py; then
+            # Commit and push the fix
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}"
+            git add CLAUDE.md
+            if ! git diff --cached --quiet; then
+              git commit -m "chore: auto-sync test counts in CLAUDE.md [skip ci]"
+              git push origin HEAD
+              echo "AUTOFIX_APPLIED=true" >> $GITHUB_ENV
+              echo "Counts committed and pushed."
+            fi
+            # Close any stale agent-task issues about count drift
+            gh issue list --label agent-task --state open --json number,title \
+              --jq '.[] | select(.title | contains("Test count drift")) | .number' \
+              > /tmp/count_issues.txt 2>/dev/null || true
+            while IFS= read -r n; do
+              [ -n "$n" ] && gh issue close "$n" \
+                --comment "Auto-fixed by count-sync workflow ($(date -u +%Y-%m-%dT%H:%M:%SZ))." || true
+            done < /tmp/count_issues.txt
+          else
+            echo "AUTOFIX_APPLIED=false" >> $GITHUB_ENV
+          fi
+
+      - name: Create issue if counts still drift
+        if: env.AUTOFIX_APPLIED != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -82,29 +110,34 @@ jobs:
               print("All test counts match CLAUDE.md — no issue needed")
               sys.exit(0)
 
-          mismatches = data.get("mismatches", [])
+          # Only report non-zero actual counts; actual=0 means collection failure
+          real_mismatches = [m for m in data.get("mismatches", []) if m.get("actual", 0) > 0]
+          if not real_mismatches:
+              print("All mismatches are collection failures (env issue) — skipping issue creation")
+              sys.exit(0)
+
           mismatch_list = "\n".join(
               f"- `{m['repo']}`: actual={m['actual']}, claimed={m['claimed']}"
-              for m in mismatches
+              for m in real_mismatches
           )
 
           body = f"""## Test Count Drift in CLAUDE.md
 
-          **Mismatches:** {count}
+          **Mismatches:** {len(real_mismatches)}
           **Date:** {data['generated_at']}
 
           ### Drifted repos
           {mismatch_list}
 
           ### Fix
-          Update the test count column in the hub `CLAUDE.md` ecosystem table
-          for the repos listed above.
+          Auto-fix was attempted but could not be applied. Update the test count column
+          in hub `CLAUDE.md` for the repos listed above.
 
           Actual counts from `pytest --co -q`: see `_scratchpad/count-sync.json`
           """
           result = subprocess.run([
               "gh", "issue", "create",
-              "--title", f"[agent] Test count drift: {count} repos out of sync in CLAUDE.md",
+              "--title", f"[agent] Test count drift: {len(real_mismatches)} repos out of sync in CLAUDE.md",
               "--body", body,
               "--label", "agent-task",
           ], capture_output=True, text=True)

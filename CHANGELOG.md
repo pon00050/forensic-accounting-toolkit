@@ -4,6 +4,24 @@ Audit trail for ecosystem-wide changes coordinated from this hub.
 
 ---
 
+## 2026-03-31 — Autonomous autofix loop (count-sync + doc-drift)
+
+Closed the detect → create-issue gap with deterministic fix workers embedded directly in tier1 workflows. No LLM required for these two fix types.
+
+**`scripts/ci/autofix-count-sync.py`** — reads `_scratchpad/count-sync.json`, patches the test count column in hub `CLAUDE.md` for each mismatch where `actual > 0` (collection failures skipped). Commits with `[skip ci]`.
+
+**`scripts/ci/autofix-doc-drift.py`** — reads `_scratchpad/doc-drift.json`, applies `kr-forensic-finance → forensic-accounting-toolkit` on hub files only. Sibling repo files fall through to issue creation with a note.
+
+**`tier1-count-sync.yml`** — upgraded to `contents: write`. Auto-fix step: runs script, commits + pushes on success, closes stale `agent-task` count-drift issues. Issue creation only fires if autofix was not applied.
+
+**`tier1-doc-drift.yml`** — same pattern: auto-fix hub drift, `[skip ci]` commit, close stale issues. Issue creation reports only sibling-repo findings.
+
+**`count-sync-check.sh`** — corrected REPO_BASE to `$PARENT` (repos are at `$PARENT/<repo>` via symlinks, not `$GITHUB_WORKSPACE/<repo>`). COLLECTION_FAILED logic retained.
+
+**`kr-beneish`** — added `tests/test_datasets.py` (9 tests). Count in hub CLAUDE.md updated 61 → 70. Duplicate issues #3, #5 closed.
+
+---
+
 ## 2026-03-31 — Triage friction fixes (board snapshot, sibling guard, CI false positives)
 
 Four workflow frictions addressed:

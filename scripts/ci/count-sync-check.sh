@@ -30,9 +30,9 @@ declare -A ACTUAL_COUNTS=()
 declare -A CLAIMED_COUNTS=()
 declare -a MISMATCHES=()
 
-# Repos are symlinked to $GITHUB_WORKSPACE/<repo> by checkout-ecosystem.sh
-# ($PARENT/<repo> does not exist — clones are at $GITHUB_WORKSPACE/_deps/<repo>)
-REPO_BASE="$GITHUB_WORKSPACE"
+# checkout-ecosystem.sh symlinks $GITHUB_WORKSPACE/_deps/<repo> → $PARENT/<repo>
+# so repos are accessible at $PARENT/<repo> after that step runs.
+REPO_BASE="$PARENT"
 
 declare -A COLLECTION_FAILED=()
 

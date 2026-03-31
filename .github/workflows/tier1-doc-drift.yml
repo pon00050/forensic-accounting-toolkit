@@ -12,7 +12,7 @@ on:
 
 permissions:
   issues: write
-  contents: read
+  contents: write
 
 jobs:
   scan:
@@ -51,14 +51,45 @@ jobs:
           path: _scratchpad/doc-drift.json
           retention-days: 90
 
-      - name: Create or update issue if drift found
+      - name: Auto-fix hub doc drift
         env:
           GH_TOKEN: ${{ github.token }}
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: |
+          if python3 scripts/ci/autofix-doc-drift.py; then
+            # Commit hub fixes — [skip ci] prevents push-loop (workflow triggers on *.md pushes)
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}"
+            git add -u
+            if ! git diff --cached --quiet; then
+              git commit -m "fix: auto-replace stale kr-forensic-finance refs in hub docs [skip ci]"
+              git push origin HEAD
+              echo "HUB_AUTOFIX_APPLIED=true" >> $GITHUB_ENV
+              echo "Hub drift fixed and pushed."
+            fi
+            # Close stale hub-only drift issues (sibling-repo issues stay open)
+            gh issue list --label agent-task --state open --json number,title \
+              --jq '.[] | select(.title | contains("Doc drift")) | .number' \
+              > /tmp/drift_issues.txt 2>/dev/null || true
+            while IFS= read -r n; do
+              [ -n "$n" ] && gh issue close "$n" \
+                --comment "Hub doc drift auto-fixed ($(date -u +%Y-%m-%dT%H:%M:%SZ)). Sibling repo drift (if any) still requires manual attention." || true
+            done < /tmp/drift_issues.txt
+          else
+            echo "HUB_AUTOFIX_APPLIED=false" >> $GITHUB_ENV
+          fi
+
+      - name: Create or update issue if drift remains
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_WORKSPACE: ${{ github.workspace }}
         run: |
           python3 - <<'PYEOF'
-          import json, subprocess, sys
+          import json, os, subprocess, sys
           from pathlib import Path
 
+          workspace = Path(os.environ.get("GITHUB_WORKSPACE", ".")).resolve()
           data = json.loads(Path("_scratchpad/doc-drift.json").read_text())
           count = data.get("stale_ref_count", 0)
           if count == 0:
@@ -66,30 +97,46 @@ jobs:
               sys.exit(0)
 
           findings = data.get("findings", [])
+
+          # Separate hub vs sibling findings to tailor the issue body
+          hub_findings = []
+          sibling_findings = []
+          for f in findings:
+              try:
+                  Path(f["file"]).resolve().relative_to(workspace)
+                  hub_findings.append(f)
+              except ValueError:
+                  sibling_findings.append(f)
+
+          hub_fixed = os.environ.get("HUB_AUTOFIX_APPLIED") == "true"
+          remaining = sibling_findings if hub_fixed else findings
+          if not remaining:
+              print("All drift was in hub and has been auto-fixed — no issue needed")
+              sys.exit(0)
+
           files_list = "\n".join(
               f"- `{f['repo']}/{f['file']}` line {f['line']}: {f['text'][:80]}"
-              for f in findings[:20]
+              for f in remaining[:20]
           )
-          if count > 20:
-              files_list += f"\n... and {count - 20} more"
+          if len(remaining) > 20:
+              files_list += f"\n... and {len(remaining) - 20} more"
 
+          hub_note = f"Hub files ({len(hub_findings)} finding(s)) were auto-fixed.\n\n" if hub_fixed and hub_findings else ""
           body = f"""## Stale Repo Name References Found
 
-          **Count:** {count} occurrences of `kr-forensic-finance`
+          {hub_note}**Remaining:** {len(remaining)} occurrence(s) of `kr-forensic-finance` in sibling repos
           **Date:** {data['generated_at']}
 
-          ### Files to fix
+          ### Files requiring manual fix
           {files_list}
 
           ### Fix
-          Replace `kr-forensic-finance` with the correct current repo name (`krff-shell`
-          for the delivery shell, or the specific repo name as appropriate).
-
-          Exclude: files under `reports/` (historical), backtick code spans, "previously known as" lines.
+          Replace `kr-forensic-finance` with the correct current repo name in the files above.
+          Sibling repos require per-repo commits — auto-fix cannot apply without a PAT.
           """
           result = subprocess.run([
               "gh", "issue", "create",
-              "--title", f"[agent] Doc drift: {count} stale kr-forensic-finance references",
+              "--title", f"[agent] Doc drift: {len(remaining)} stale kr-forensic-finance references",
               "--body", body,
               "--label", "agent-task",
           ], capture_output=True, text=True)
