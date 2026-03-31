@@ -31,12 +31,18 @@ jobs:
         run: |
           mkdir -p _scratchpad
           if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            # toJSON produces valid JSON with only double-quoted strings.
+            # Single-quoting the shell argument avoids double-quote conflicts.
+            cat << 'BRIEF_EOF' > /tmp/fix-brief-raw.json
+          ${{ toJSON(github.event.client_payload) }}
+          BRIEF_EOF
+            # Pretty-print and validate the JSON
             python3 -c "
           import json, sys
-          payload = ${{ toJSON(github.event.client_payload) }}
+          data = json.load(open('/tmp/fix-brief-raw.json'))
           with open('_scratchpad/fix-brief.json', 'w') as f:
-              json.dump(payload, f, indent=2)
-          print('Fix brief:', json.dumps(payload, indent=2))
+              json.dump(data, f, indent=2)
+          print('Fix brief:', json.dumps(data, indent=2))
           "
           else:
             echo '${{ github.event.inputs.fix_brief }}' > _scratchpad/fix-brief.json
