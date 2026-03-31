@@ -64,6 +64,7 @@ jobs:
           GH_TOKEN: ${{ secrets.ECOSYSTEM_PAT }}
           ITEM_ID: ${{ steps.add_item.outputs.item_id }}
           LABEL: ${{ github.event.label.name }}
+          GITHUB_EVENT_ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           python3 - <<'PYEOF'
           import json, os, subprocess, sys
@@ -162,8 +163,3 @@ jobs:
 
           print(f"Board sync complete: issue #{os.environ.get('GITHUB_EVENT_ISSUE_NUMBER','?')} → item {item_id}")
           PYEOF
-        env:
-          GH_TOKEN: ${{ secrets.ECOSYSTEM_PAT }}
-          ITEM_ID: ${{ steps.add_item.outputs.item_id }}
-          LABEL: ${{ github.event.label.name }}
-          GITHUB_EVENT_ISSUE_NUMBER: ${{ github.event.issue.number }}
