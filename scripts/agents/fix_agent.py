@@ -2,10 +2,15 @@
 fix_agent.py — Sonnet SDK agent: fix a broken test suite.
 
 PURPOSE: Given a fix brief (category, repo, description), investigate the
-failure, apply a targeted code fix, verify with tests, and write
-fix-result.json for the workflow to create a PR.
+failure, apply a targeted code fix, self-verify with tests, and write
+fix-result.json for the independent verify_agent to review.
 
 Dispatched by tier4-autofix.yml via repository_dispatch with event_type=agent-fix.
+
+Note: This agent writes status="self_verified" — NOT "fixed". The authoritative
+"fixed" verdict comes only from verify_agent.py (MM#5 self-verification gate).
+
+Policy: MM#15 policy bundle — explicit per-agent policy.
 """
 
 from __future__ import annotations
@@ -19,6 +24,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _sdk_helpers import load_context, write_scratchpad, run_agent, collect_text  # noqa: E402
+
+# ── Policy bundle (MM#15) ─────────────────────────────────────────────────────
+
+POLICY = {
+    "tool_policy": "Read + Grep + Glob + Edit + Write + Bash — full tool set for diagnosis and repair",
+    "model_policy": "claude-sonnet-4-6 — code fixes require Sonnet reasoning depth",
+    "permission_policy": "bypassPermissions — may edit source files in _target_repo only",
+    "isolation_policy": "worker-session — independent from verify_agent (MM#5)",
+    "budget_usd": 2.00,
+    "max_turns": 25,
+}
 
 TASK_PROMPT_TEMPLATE = """
 ## Your Task: Fix a Code Issue
@@ -65,7 +81,7 @@ but don't include it in your pass count.
 If all tests pass after your fix:
 ```json
 {{
-  "status": "fixed",
+  "status": "self_verified",
   "repo": "{repo}",
   "changed_files": ["src/pkg/module.py"],
   "summary": "One sentence: what was wrong and what was changed.",
@@ -157,14 +173,17 @@ async def main() -> None:
     options = ClaudeAgentOptions(
         system_prompt=(
             static_context
-            + "\n\nYou are an autonomous code-fix agent. Your only job is to fix "
-            "the specific issue described in the brief and verify the fix with tests."
+            + f"\n\nPolicy: {json.dumps(POLICY, indent=2)}\n\n"
+            + "You are an autonomous code-fix agent. Your only job is to fix "
+            "the specific issue described in the brief and self-verify with tests. "
+            "Write status='self_verified' when tests pass — an independent verify_agent "
+            "will provide the authoritative verdict (MM#5)."
         ),
         allowed_tools=["Read", "Grep", "Glob", "Edit", "Write", "Bash"],
         permission_mode="bypassPermissions",
-        max_turns=25,
-        max_budget_usd=2.00,
-        model="claude-sonnet-4-6",
+        max_turns=POLICY["max_turns"],
+        max_budget_usd=POLICY["budget_usd"],
+        model=POLICY["model_policy"].split()[0],
         cwd=str(workspace),
     )
 
@@ -176,6 +195,7 @@ async def main() -> None:
             f"Fix agent failed for {repo} [{category}]. "
             f"Manual investigation needed. Brief: {json.dumps(brief)}"
         ),
+        agent_name="fix_agent",
     )
 
     text = collect_text(messages)

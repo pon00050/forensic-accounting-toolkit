@@ -6,6 +6,8 @@ The human reads this every morning to decide what to work on.
 
 Follows Principle #2: full briefing prompt with context, judgment calls,
 and specific output schema.
+
+Policy: MM#15 policy bundle — explicit per-agent policy.
 """
 
 import asyncio
@@ -17,6 +19,17 @@ from pathlib import Path
 # Ensure _sdk_helpers is importable
 sys.path.insert(0, str(Path(__file__).parent))
 from _sdk_helpers import load_context, write_scratchpad, run_agent  # noqa: E402
+
+# ── Policy bundle (MM#15) ─────────────────────────────────────────────────────
+
+POLICY = {
+    "tool_policy": "Read + Glob + Write only — synthesize scan output; no Bash execution",
+    "model_policy": "claude-haiku-4-5-20251001 — triage classification is classification, not reasoning",
+    "permission_policy": "bypassPermissions — write triage.json to scratchpad only",
+    "isolation_policy": "worker-session — independent worker; reports to orchestrator",
+    "budget_usd": 0.50,
+    "max_turns": 10,
+}
 
 TASK_PROMPT = """
 ## Your Task: Triage Synthesis
@@ -134,12 +147,16 @@ async def main() -> None:
     from claude_agent_sdk import ClaudeAgentOptions  # type: ignore
 
     options = ClaudeAgentOptions(
-        system_prompt=static_context + "\n\nYou are the triage analyst for this ecosystem.",
+        system_prompt=(
+            static_context
+            + f"\n\nPolicy: {json.dumps(POLICY, indent=2)}\n\n"
+            + "You are the triage analyst for this ecosystem."
+        ),
         allowed_tools=["Read", "Glob", "Write"],
         permission_mode="bypassPermissions",
-        max_turns=10,
-        max_budget_usd=0.50,
-        model="claude-haiku-4-5-20251001",
+        max_turns=POLICY["max_turns"],
+        max_budget_usd=POLICY["budget_usd"],
+        model=POLICY["model_policy"].split()[0],
         cwd=os.environ.get("GITHUB_WORKSPACE", "."),
     )
 
@@ -148,6 +165,7 @@ async def main() -> None:
         prompt,
         options,
         escalation_context="Triage synthesis failed. Raw scan output available at _scratchpad/triage-scan-raw.txt",
+        agent_name="triage_agent",
     )
 
     # Extract JSON from agent output

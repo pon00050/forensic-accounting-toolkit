@@ -3,6 +3,8 @@ data_validate_agent.py — Haiku SDK agent: parquet validation report.
 
 PURPOSE: Verify that pipeline parquet outputs are correct, not just present.
 Follows Principle #5: verification = proving it works, not confirming it exists.
+
+Policy: MM#15 policy bundle — explicit per-agent policy.
 """
 
 import asyncio
@@ -13,6 +15,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _sdk_helpers import load_context, write_scratchpad, run_agent  # noqa: E402
+
+# ── Policy bundle (MM#15) ─────────────────────────────────────────────────────
+
+POLICY = {
+    "tool_policy": "Bash + Read only — run inline Python for parquet checks; no edits",
+    "model_policy": "claude-haiku-4-5-20251001 — data validation is structured checks, not reasoning",
+    "permission_policy": "bypassPermissions — reads parquet files; writes data-validation.json only",
+    "isolation_policy": "worker-session — independent validator; reports to orchestrator",
+    "budget_usd": 0.30,
+    "max_turns": 15,
+}
 
 TASK_PROMPT = """
 ## Your Task: Parquet Data Validation
@@ -100,13 +113,14 @@ async def main() -> None:
     options = ClaudeAgentOptions(
         system_prompt=(
             static_context
-            + "\n\nYou are the data validation agent. Your job is to PROVE correctness, not confirm existence."
+            + f"\n\nPolicy: {json.dumps(POLICY, indent=2)}\n\n"
+            + "You are the data validation agent. Your job is to PROVE correctness, not confirm existence."
         ),
         allowed_tools=["Bash", "Read"],
         permission_mode="bypassPermissions",
-        max_turns=15,
-        max_budget_usd=0.30,
-        model="claude-haiku-4-5-20251001",
+        max_turns=POLICY["max_turns"],
+        max_budget_usd=POLICY["budget_usd"],
+        model=POLICY["model_policy"].split()[0],
         cwd=workspace,
     )
 
@@ -115,6 +129,7 @@ async def main() -> None:
         prompt,
         options,
         escalation_context="Data validation failed. Check parquet files in krff-shell/01_Data/processed/",
+        agent_name="data_validate_agent",
     )
 
     from _sdk_helpers import collect_text

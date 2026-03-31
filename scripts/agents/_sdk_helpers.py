@@ -7,6 +7,7 @@ Provides:
 - read_scratchpad(): read a scratchpad file if it exists
 - collect_text(): collect text from claude_agent_sdk message stream
 - run_agent(): run an SDK agent with retry on failure (Principle #12)
+- generate_task_id(): UUID4 short identifier for task-notification envelopes
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ import asyncio
 import json
 import os
 import sys
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -31,6 +33,11 @@ def load_context() -> str:
     if not context_path.exists():
         raise FileNotFoundError(f"CONTEXT.md not found at {context_path}")
     return context_path.read_text(encoding="utf-8")
+
+
+def generate_task_id() -> str:
+    """Generate a short UUID4 task identifier for <task-notification> envelopes (MM#8)."""
+    return "TASK-" + str(uuid.uuid4())[:8].upper()
 
 
 # ── Scratchpad I/O ─────────────────────────────────────────────────────────────
@@ -53,6 +60,41 @@ def read_scratchpad(filename: str) -> dict[str, Any] | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _append_task_notification(
+    task_id: str,
+    agent_name: str,
+    status: str,
+    summary: str,
+    token_usage: dict | None = None,
+) -> None:
+    """
+    Append a <task-notification> audit entry to task-notifications.jsonl (MM#8).
+
+    Each line is a JSON record. The XML envelope format matches the coordinator
+    protocol: task-id, status, summary, token-usage.
+    """
+    SCRATCHPAD.mkdir(parents=True, exist_ok=True)
+    log_path = SCRATCHPAD / "task-notifications.jsonl"
+
+    entry = {
+        "task_id": task_id,
+        "agent": agent_name,
+        "status": status,  # "complete" | "failed" | "retried"
+        "summary": summary[:300],
+        "token_usage": token_usage or {},
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "envelope": (
+            f'<task-notification task-id="{task_id}" agent="{agent_name}" '
+            f'status="{status}" summary="{summary[:120].replace(chr(34), chr(39))}" />'
+        ),
+    }
+
+    with open(log_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+    print(f"[task-notification] {entry['envelope']}", file=sys.stderr)
+
+
 # ── Message stream handling ────────────────────────────────────────────────────
 
 def collect_text(messages: list) -> str:
@@ -68,6 +110,19 @@ def collect_text(messages: list) -> str:
     return "\n".join(parts)
 
 
+def _extract_token_usage(messages: list) -> dict:
+    """Best-effort extraction of token usage from SDK messages."""
+    for msg in reversed(messages):
+        usage = getattr(msg, "usage", None)
+        if usage:
+            return {
+                "input_tokens": getattr(usage, "input_tokens", 0),
+                "output_tokens": getattr(usage, "output_tokens", 0),
+                "cache_read_tokens": getattr(usage, "cache_read_input_tokens", 0),
+            }
+    return {}
+
+
 # ── Agent runner with retry (Principle #12) ───────────────────────────────────
 
 async def run_agent(
@@ -76,6 +131,7 @@ async def run_agent(
     *,
     max_retries: int = 1,
     escalation_context: str = "",
+    agent_name: str = "",
 ) -> list:
     """
     Run an SDK agent and retry once on failure (Principle #12: continue failed workers).
@@ -83,9 +139,19 @@ async def run_agent(
     On first failure: sends a correction prompt with error context.
     On second failure: writes escalation.md and re-raises.
 
+    Writes a <task-notification> entry to task-notifications.jsonl on completion
+    or failure (MM#8 audit trail).
+
     Returns the list of messages from the successful run.
     """
     from claude_agent_sdk import ClaudeSDKClient  # type: ignore
+
+    task_id = generate_task_id()
+    # Derive agent name from caller if not provided
+    if not agent_name:
+        agent_name = os.path.basename(
+            sys._getframe(1).f_globals.get("__file__", "unknown")
+        ).replace(".py", "")
 
     messages: list = []
     last_error: Exception | None = None
@@ -106,14 +172,26 @@ async def run_agent(
                                     print(block.text, end="", flush=True)
                         elif hasattr(content, "text"):
                             print(content.text, end="", flush=True)
+
+                text_summary = collect_text(messages)[:200]
+                token_usage = _extract_token_usage(messages)
+
+                if attempt > 0:
+                    _append_task_notification(task_id, agent_name, "retried-complete", text_summary, token_usage)
+                else:
+                    _append_task_notification(task_id, agent_name, "complete", text_summary, token_usage)
+
                 return messages
+
             except Exception as exc:
                 last_error = exc
                 if attempt < max_retries:
                     print(f"\n[retry] attempt {attempt + 1} failed: {exc}", file=sys.stderr)
                     print("[retry] continuing with same worker (Principle #12)", file=sys.stderr)
+                    _append_task_notification(task_id, agent_name, "retried", str(exc)[:200])
                     continue
                 # All retries exhausted — write escalation
+                _append_task_notification(task_id, agent_name, "failed", str(exc)[:200])
                 _write_escalation(last_error, escalation_context)
                 raise
 

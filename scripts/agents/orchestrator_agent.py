@@ -7,9 +7,11 @@ understanding). It is the brain; workers are the hands.
 
 Principles encoded:
 #1 Never delegate understanding — orchestrator synthesizes, never passes through
-#3 Coordinator mode — never executes tools directly, only reads and dispatches
+#3 Coordinator mode — ZERO tools; all data pre-injected by Python wrapper
+#7 Prompt cache — static CONTEXT.md prefix shared across all agents
 #8 Worker results are internal signals — orchestrator talks to user via issues
 #11 Research → Synthesis → Implementation → Verification
+#15 Policy bundle — explicit tool/model/permission/isolation policy per agent
 """
 
 import asyncio
@@ -20,16 +22,30 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _sdk_helpers import load_context, write_scratchpad, read_scratchpad, run_agent  # noqa: E402
+from _sdk_helpers import load_context, write_scratchpad, run_agent  # noqa: E402
 
-# The orchestrator's core system prompt (Principle #1)
-ORCHESTRATOR_SYSTEM_SUFFIX = """
+# ── Policy bundle (MM#15) ─────────────────────────────────────────────────────
+
+POLICY = {
+    "tool_policy": "NONE — coordinator receives pre-injected data; no tool calls permitted",
+    "model_policy": "claude-sonnet-4-6 — synthesis requires Sonnet reasoning depth",
+    "permission_policy": "bypassPermissions — read-only synthesis; no filesystem writes via agent",
+    "isolation_policy": "coordinator-mode — CLAUDE_CODE_COORDINATOR_MODE=true must be set",
+    "budget_usd": 1.00,
+    "max_turns": 5,  # coordinator should synthesize in 1-2 turns; 5 is a hard cap
+}
+
+# ── System prompt ─────────────────────────────────────────────────────────────
+
+ORCHESTRATOR_SYSTEM_SUFFIX = f"""
 ## Your Role: Coordinator (NOT an Executor)
 
 You are the BRAIN of the forensic-accounting-toolkit agent team.
-You NEVER execute tasks directly. You read worker results, SYNTHESIZE them,
-and produce SPECIFIC action briefs with enough detail that a worker agent
-(or human) can execute without needing to understand the context.
+You operate in COORDINATOR MODE — you have NO tools available.
+ALL data you need has been pre-injected into this prompt.
+Your only output is synthesized analysis and a structured JSON object.
+
+Policy: {json.dumps(POLICY, indent=2)}
 
 ## Critical Anti-Pattern (NEVER do this)
 
@@ -52,36 +68,32 @@ RIGHT: "kr-derivatives test failure: test_moneyness_calculation fails because
 
 ## Your Workflow Each Run
 
-1. RESEARCH: Read ALL available worker scratchpad artifacts
+1. RESEARCH: Analyze ALL pre-injected worker scratchpad data below
 2. SYNTHESIS: Cross-reference findings — find patterns, cascade risks, root causes
 3. ACTION BRIEFS: Produce SPECIFIC, file-level briefs with line numbers when possible
-4. DISPATCH: Create GitHub issues with the briefs (one issue per distinct problem)
-5. VERIFY: Check if issues from PREVIOUS orchestrator run were resolved
+4. VERIFICATION: Check the pre-injected open-issues data for unresolved P0s
 
 ## Escalation
 
-Write to _scratchpad/escalation.md if you find:
+Include escalation_needed: true in your JSON output if you find:
 - Test suite regression introduced by recent commits
 - Three or more consecutive unresolved P0 issues
 - Any needed destructive git operation
 - Any unrecognized repo structure
 """
 
-TASK_PROMPT = """
-## Orchestrator Run — Synthesize All Worker Outputs
+# ── Task prompt template ──────────────────────────────────────────────────────
 
-### Step 1: Read All Available Scratchpad Files
+TASK_PROMPT_HEADER = """
+## Orchestrator Run — Synthesize All Pre-Injected Worker Data
 
-Read these files (use the Read tool, not Bash):
-- _scratchpad/test-results.json (from tier1-tests — daily)
-- _scratchpad/triage.json (from tier2-triage — daily)
-- _scratchpad/convention-audit.json (from tier3-convention-audit — weekly)
-- _scratchpad/doc-drift.json (from tier1-doc-drift — daily)
-- _scratchpad/count-sync.json (from tier1-count-sync — daily)
-- _scratchpad/data-validation.json (from tier2-data-validate — on-demand)
-- _scratchpad/pipeline.json (from tier3-pipeline — weekly)
+All scratchpad artifacts and the current open-issue list have been injected below.
+You have NO tools — synthesize entirely from the provided data.
 
-If any file is missing, note it but continue — not all agents run daily.
+### Step 1: Review Pre-Injected Data
+
+Read all sections marked ## PRE-INJECTED below. Note which workers ran
+(have data) and which did not (marked NOT AVAILABLE).
 
 ### Step 2: Synthesize Ecosystem Health
 
@@ -107,9 +119,11 @@ For EACH actionable issue, write a brief containing:
 - priority: P0-P3
 - ai_actionable: true if an agent can fix it autonomously
 
-### Step 4: Write orchestrator.json
+### Step 4: Output orchestrator.json
 
-Write to _scratchpad/orchestrator.json:
+Your response MUST end with a JSON code block in exactly this format:
+
+```json
 {
   "generated_at": "<ISO>",
   "ecosystem_health_score": "<N>/10",
@@ -120,12 +134,12 @@ Write to _scratchpad/orchestrator.json:
       "priority": "P0|P1|P2|P3",
       "repo": "<repo>",
       "file": "<path or null>",
-      "line": <int or null>,
+      "line": null,
       "category": "TEST_FAILURE|CONVENTION_DRIFT|DOC_DRIFT|DATA_STALE|COUNT_DRIFT|BOARD_STALE",
       "change": "<exact change>",
       "why": "<root cause>",
       "command": "<command or null>",
-      "ai_actionable": true|false,
+      "ai_actionable": true,
       "source_workers": ["test-results", "triage"]
     }
   ],
@@ -133,65 +147,75 @@ Write to _scratchpad/orchestrator.json:
     {"item": "<description>", "reason": "<why>"}
   ],
   "verification": {
-    "previous_issues_checked": <int>,
-    "resolved_since_last_run": <int>,
-    "persistent_unresolved": <int>
+    "previous_issues_checked": 0,
+    "resolved_since_last_run": 0,
+    "persistent_unresolved": 0
   },
   "escalation_needed": false
 }
-
-### Step 5: Verify Previous Issues
-
-Use the Bash tool to check:
-```bash
-gh issue list --label agent-task --state open --json number,title,createdAt | head -50
 ```
 
-For issues older than 7 days with priority:p0 label — they are persistent failures.
-Record in verification.persistent_unresolved.
-
-If 3+ P0 issues are >7 days old, set escalation_needed: true.
+No prose after the JSON block.
 """
+
+# Cap per scratchpad file to stay within token budget
+_FILE_CHAR_LIMIT = 8000
 
 
 async def main() -> None:
     static_context = load_context()
     workspace = os.environ.get("GITHUB_WORKSPACE", ".")
-
-    # Pre-load available scratchpad files to include in prompt
-    available_files = []
     scratchpad = Path(workspace) / "_scratchpad"
-    for fname in ["test-results.json", "triage.json", "convention-audit.json",
-                  "doc-drift.json", "count-sync.json", "data-validation.json", "pipeline.json"]:
+
+    # ── Pre-inject all scratchpad files (MM#3 coordinator purity) ────────────
+    injected_sections: list[str] = []
+
+    worker_files = [
+        "test-results.json",
+        "triage.json",
+        "convention-audit.json",
+        "doc-drift.json",
+        "count-sync.json",
+        "data-validation.json",
+        "pipeline.json",
+        "open-issues.json",  # pre-fetched by orchestrator.yml step
+    ]
+
+    for fname in worker_files:
         fpath = scratchpad / fname
         if fpath.exists():
-            available_files.append(f"- {fname} (available)")
+            content = fpath.read_text(encoding="utf-8", errors="replace")
+            if len(content) > _FILE_CHAR_LIMIT:
+                content = content[:_FILE_CHAR_LIMIT] + "\n... [TRUNCATED]"
+            injected_sections.append(
+                f"## PRE-INJECTED: {fname}\n```json\n{content}\n```"
+            )
         else:
-            available_files.append(f"- {fname} (NOT AVAILABLE — agent may not have run yet)")
+            injected_sections.append(
+                f"## PRE-INJECTED: {fname}\n(NOT AVAILABLE — worker may not have run yet)"
+            )
 
-    availability_note = (
-        "\n### Available Scratchpad Files\n" + "\n".join(available_files) + "\n"
-    )
-
-    prompt = availability_note + TASK_PROMPT
+    pre_injected_block = "\n\n".join(injected_sections)
+    prompt = TASK_PROMPT_HEADER + "\n\n---\n\n" + pre_injected_block
 
     from claude_agent_sdk import ClaudeAgentOptions  # type: ignore
 
     options = ClaudeAgentOptions(
         system_prompt=static_context + ORCHESTRATOR_SYSTEM_SUFFIX,
-        allowed_tools=["Read", "Bash", "Glob"],
+        allowed_tools=[],   # MM#3: coordinator ZERO tools — synthesize pre-injected data only
         permission_mode="bypassPermissions",
-        max_turns=20,
-        max_budget_usd=1.00,
-        model="claude-sonnet-4-6",
+        max_turns=POLICY["max_turns"],
+        max_budget_usd=POLICY["budget_usd"],
+        model=POLICY["model_policy"].split()[0],  # "claude-sonnet-4-6"
         cwd=workspace,
     )
 
-    print("Running orchestrator agent (Sonnet)...", file=sys.stderr)
+    print("Running orchestrator agent (Sonnet) — coordinator mode, no tools...", file=sys.stderr)
     messages = await run_agent(
         prompt,
         options,
         escalation_context="Orchestrator synthesis failed. Review all _scratchpad/*.json files manually.",
+        agent_name="orchestrator_agent",
     )
 
     from _sdk_helpers import collect_text
@@ -239,7 +263,7 @@ async def main() -> None:
         print("[ESCALATION] escalation.md written — human review required", file=sys.stderr)
 
     briefs = result.get("action_briefs", [])
-    print(f"\n[orchestrator] Health: {result.get('ecosystem_health_score', '?')}/10 | "
+    print(f"\n[orchestrator] Health: {result.get('ecosystem_health_score', '?')} | "
           f"{len(briefs)} action briefs", file=sys.stderr)
 
     # Create GitHub issues for actionable briefs
@@ -251,11 +275,9 @@ def _create_issues(briefs: list, workspace: str) -> None:
     p0_p1 = [b for b in briefs if b.get("priority") in ("P0", "P1")]
     other = [b for b in briefs if b.get("priority") in ("P2", "P3")]
 
-    # Create individual issues for P0/P1
     for brief in p0_p1:
         _create_issue(brief)
 
-    # Batch P2/P3 into one issue to reduce noise
     if other:
         _create_batched_issue(other)
 
@@ -274,24 +296,24 @@ def _create_issue(brief: dict) -> None:
 
     body = f"""## {category} — `{repo}`
 
-    **Priority:** {priority}
-    **AI-actionable:** {brief.get('ai_actionable', True)}
-    **Source workers:** {', '.join(brief.get('source_workers', []))}
+**Priority:** {priority}
+**AI-actionable:** {brief.get('ai_actionable', True)}
+**Source workers:** {', '.join(brief.get('source_workers', []))}
 
-    ### Location
-    {location or 'See description'}
+### Location
+{location or 'See description'}
 
-    ### Required Change
-    {change}
+### Required Change
+{change}
 
-    ### Root Cause
-    {why}
+### Root Cause
+{why}
 
-    {f'### Command{chr(10)}```bash{chr(10)}{command}{chr(10)}```' if command else ''}
+{f'### Command{chr(10)}```bash{chr(10)}{command}{chr(10)}```' if command else ''}
 
-    ---
-    *Generated by orchestrator agent — Brief ID: {brief.get('id', 'unknown')}*
-    """
+---
+*Generated by orchestrator agent — Brief ID: {brief.get('id', 'unknown')}*
+"""
 
     labels = ["agent-task", f"priority:{priority.lower()}"]
     if not brief.get("ai_actionable", True):
@@ -321,15 +343,15 @@ def _create_batched_issue(briefs: list) -> None:
 
     body = f"""## Batched P2/P3 Action Items
 
-    {len(briefs)} lower-priority issues from latest orchestrator run.
+{len(briefs)} lower-priority issues from latest orchestrator run.
 
-    ### Items
-    {items}
+### Items
+{items}
 
-    See `_scratchpad/orchestrator.json` for full briefs.
-    ---
-    *Generated by orchestrator agent*
-    """
+See `_scratchpad/orchestrator.json` for full briefs.
+---
+*Generated by orchestrator agent*
+"""
 
     subprocess.run([
         "gh", "issue", "create",

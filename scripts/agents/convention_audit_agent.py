@@ -3,6 +3,8 @@ convention_audit_agent.py — Sonnet SDK agent: full 182-check convention audit.
 
 PURPOSE: Prove each repo's compliance with all 14 canonical conventions.
 Follows Principle #5: semantic verification, not grep-and-done.
+
+Policy: MM#15 policy bundle — explicit per-agent policy.
 """
 
 import asyncio
@@ -13,6 +15,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _sdk_helpers import load_context, write_scratchpad, run_agent, read_scratchpad  # noqa: E402
+
+# ── Policy bundle (MM#15) ─────────────────────────────────────────────────────
+
+POLICY = {
+    "tool_policy": "Bash + Read + Glob + Grep — semantic verification; read-only, no edits",
+    "model_policy": "claude-sonnet-4-6 — 182 checks across 13 repos requires Sonnet reasoning",
+    "permission_policy": "bypassPermissions — reads sibling repos; writes convention-audit.json only",
+    "isolation_policy": "worker-session — independent auditor; reports to orchestrator",
+    "budget_usd": 2.00,
+    "max_turns": 30,
+}
 
 TASK_PROMPT = """
 ## Your Task: Full Convention Audit (182 checks)
@@ -142,13 +155,14 @@ async def main() -> None:
     options = ClaudeAgentOptions(
         system_prompt=(
             static_context
-            + "\n\nYou are the convention auditor. You verify compliance semantically, not just by grep."
+            + f"\n\nPolicy: {json.dumps(POLICY, indent=2)}\n\n"
+            + "You are the convention auditor. You verify compliance semantically, not just by grep."
         ),
         allowed_tools=["Bash", "Read", "Glob", "Grep"],
         permission_mode="bypassPermissions",
-        max_turns=30,
-        max_budget_usd=2.00,
-        model="claude-sonnet-4-6",
+        max_turns=POLICY["max_turns"],
+        max_budget_usd=POLICY["budget_usd"],
+        model=POLICY["model_policy"].split()[0],
         cwd=workspace,
     )
 
@@ -157,6 +171,7 @@ async def main() -> None:
         prompt,
         options,
         escalation_context="Convention audit failed. Check repos at parent directory.",
+        agent_name="convention_audit_agent",
     )
 
     from _sdk_helpers import collect_text

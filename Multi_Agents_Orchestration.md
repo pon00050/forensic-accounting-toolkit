@@ -86,6 +86,22 @@ their results as internal signals, and remains the only entity that speaks to th
 The coordinator never executes tools directly — it only reads, thinks, and delegates.
 Workers are the hands. The coordinator is the brain.
 
+The coordinator has exactly **four tools** available — no more:
+
+| Tool | Purpose |
+|------|---------|
+| `Agent` | Spawns a new worker with its own context and system prompt |
+| `SendMessage` | Continues an existing worker by task ID, preserving prior context |
+| `TaskStop` | Terminates a running worker mid-execution |
+| `SyntheticOutput` | Internal output signaling mechanism |
+
+The coordinator cannot access Bash, Read, Edit, Glob, Grep, or any MCP tools.
+Workers receive the full tool set plus MCP access. This tool restriction is not a
+convention — it is enforced at the API level in coordinator mode.
+
+When MCP servers connect, their tool names are advertised to the coordinator so it
+knows which tools its workers can invoke without needing to query each worker.
+
 **Fork mode:** A parent agent copies itself. Each child inherits the parent's full
 conversation context and system prompt. Because all children share byte-identical API
 request prefixes, the prompt cache is maximized — forks are cheaper per token than
@@ -107,13 +123,31 @@ The results merge back when each worker's branch is complete.
 | Mode | Process | Cache sharing | Best for |
 |------|---------|--------------|---------|
 | Fork | Child of parent | Yes — byte-identical prefix | Parallel tasks with shared context |
+| Fresh specialist | Separate, clean context | No | Independent judgment, verification, no bias from prior chain |
 | Teammate | Separate, file mailbox | No | Long-running background workers |
 | Worktree | Separate, isolated branch | No | Concurrent implementation on same codebase |
 
+**Fork vs. Fresh Specialist — the distinction that matters:**
+
+A fork *preserves context* and continues a reasoning lineage. It is the right tool when
+workers need shared prior context (the entire codebase exploration, the full error log)
+and their tasks differ only in direction. Cache sharing is the economic benefit, but
+shared context is the functional purpose.
+
+A fresh specialist has *no prior bias*. It brings independent judgment uncorrupted by
+the generator's assumptions. This is what makes verification meaningful and what makes
+a second-opinion agent worth running. Never fork for verification — the fork carries
+the same blind spots as the parent.
+
+These two modes serve different purposes and must not be conflated. Using a fork where
+a fresh specialist is required produces the same failure as self-verification.
+
 > **Key insight:** The forensic-accounting-toolkit orchestrator is a pure coordinator.
-> The `orchestrator_agent.py` script only uses `Read` and `Bash` (for `gh` CLI) —
-> it reads scratchpad files and creates GitHub issues. It never directly runs `pytest`,
-> edits files, or touches repos. That is strictly for dispatched workers.
+> The `orchestrator_agent.py` script uses **zero tools** (`allowed_tools=[]`).
+> All scratchpad data is pre-injected into the prompt by the `orchestrator.yml`
+> workflow step before the agent runs. GitHub issue creation and dispatch happen
+> in post-agent Python steps, not inside the agent session. The agent only synthesizes
+> and outputs a JSON code block. It never reads files, runs commands, or touches repos.
 
 ---
 
@@ -132,6 +166,10 @@ is relevant to the next task?
 
 > **Key insight:** There is no universal default. This is a judgment call each time.
 
+The concrete mechanism for "Continue" is the `SendMessage` tool: the coordinator calls
+`SendMessage` with the worker's task ID. The worker resumes from its preserved context —
+it has the full history of what it tried, what failed, and what the error was.
+
 The `_sdk_helpers.py` implementation uses `ClaudeSDKClient` (stateful session) for
 the retry path: when a worker fails, it sends a correction message to the *same* session
 rather than spawning a new one. The worker already has the error — that is valuable.
@@ -149,22 +187,38 @@ presence.
 > implemented something carries the implementer's assumptions — it will unconsciously
 > verify what it believed it built, not what is actually there.
 
+**Self-verification is advisory only — never authoritative.**
+
+The model that generates must not be the model that approves. This is not a preference —
+it is a structural rule. When a generator self-verifies, it validates its own assumptions,
+not objective correctness. Self-review output may inform the coordinator (advisory), but
+it cannot serve as a gate (authoritative). Only an independent fresh agent can gate.
+
+**Require structured outputs and deterministic checks from the verifier.**
+
+The verifier must not share reasoning context with the generator — and it must return
+structured output so the coordinator can parse results programmatically, not by
+interpreting prose. Deterministic checks (exact counts, null rate thresholds, schema
+assertions) leave no room for rationalisation.
+
 **From `data_validate_agent.py` — proving correctness, not existence:**
 
 ```python
 # WRONG (existence check):
 assert path.exists(), "file missing"
 
-# RIGHT (correctness proof):
+# RIGHT (correctness proof with structured output):
 df = pd.read_parquet(path)
 assert len(df) > 0, "EMPTY dataframe"
 assert df['corp_code'].nunique() > 100, "suspiciously few companies"
 assert df.isnull().mean().max() < 0.3, "null rate too high"
 assert (df['close'] > 0).mean() > 0.9, "prices mostly zero"
+# Returns: {"status": "pass"|"fail", "checks": [...], "row_count": int}
 ```
 
 The second block proves the pipeline produced *meaningful* data for the Korean
-market — not just a non-empty file.
+market — not just a non-empty file. The structured return lets the orchestrator
+branch on `status` without parsing free-text.
 
 ---
 
@@ -231,8 +285,25 @@ which breaks the cache.
 ## Mental Model #8 — Worker Results Are Internal Signals, Not Conversation Partners
 
 The coordinator has one communication channel for the user (GitHub issues, summary
-posts) and a separate internal channel for receiving worker results (scratchpad files,
-task notifications). These must never be confused.
+posts) and a separate internal channel for receiving worker results (task notifications,
+scratchpad files). These must never be confused.
+
+Workers report completion via `<task-notification>` XML envelopes:
+
+```xml
+<task-notification>
+  <task-id>worker-abc123</task-id>
+  <status>completed</status>   <!-- or: failed | killed -->
+  <summary>Scanned 13 repos; 4 convention violations found</summary>
+  <results>...</results>
+  <token-usage>input: 4821, output: 312</token-usage>
+</task-notification>
+```
+
+This is the event injection pattern: outcomes are delivered as structured events, not
+as conversational replies. The structured format enables the coordinator to parse and
+act on results programmatically — and creates an audit trail of every worker completion
+with token costs attached.
 
 > **Key insight:** Never thank workers. Never acknowledge their output in the user-facing
 > channel. Worker results arrive as internal signals. The coordinator processes them
@@ -278,18 +349,46 @@ failures without data loss.
 
 ```
 $GITHUB_WORKSPACE/_scratchpad/
-  test-results.json       ← written by tier1-tests
-  triage.json             ← written by tier2-triage
-  convention-audit.json   ← written by tier3-convention-audit
-  doc-drift.json          ← written by tier1-doc-drift
-  count-sync.json         ← written by tier1-count-sync
-  orchestrator.json       ← written by orchestrator (synthesis of all above)
-  escalation.md           ← written by any agent hitting a hard stop
+  # ── Worker outputs (read by orchestrator) ─────────────────────────────────
+  test-results.json         ← tier1-tests (daily 07:00 KST)
+  triage.json               ← tier2-triage (daily 09:00 KST)
+  triage-scan-raw.txt       ← tier2-triage raw bash output (archived)
+  triage_issue_url.txt      ← tier2-triage — URL of daily triage GitHub issue
+  convention-audit.json     ← tier3-convention-audit (weekly Sun)
+  convention-audit-prev.json← tier3-convention-audit — previous run for delta
+  doc-drift.json            ← tier1-doc-drift (daily 08:00 KST + on push)
+  count-sync.json           ← tier1-count-sync (after tier1-tests)
+  data-validation.json      ← tier2-data-validate (on-demand after pipeline)
+  pipeline.json             ← tier3-pipeline (weekly Mon)
+  open-issues.json          ← pre-fetched by orchestrator.yml (gh issue list)
+
+  # ── Orchestrator outputs ───────────────────────────────────────────────────
+  orchestrator.json         ← coordinator synthesis + action briefs
+  health_summary.json       ← compact health card (Telegram + /status bot)
+  issue_url.txt             ← URL of orchestrator summary GitHub issue
+  escalation.md             ← written by any agent hitting a hard stop
+
+  # ── Tier 4 fix loop ────────────────────────────────────────────────────────
+  fix-brief.json            ← tier4: input from repository_dispatch payload
+  fix-result.json           ← tier4: fix_agent output (status=self_verified|needs_human)
+  verify-result.json        ← tier4: verify_agent output (status=pass|fail|skipped)
+  pr-result.json            ← tier4: PR creation outcome (status=fixed|needs_human)
+
+  # ── Audit trail ────────────────────────────────────────────────────────────
+  task-notifications.jsonl  ← append-only log of <task-notification> envelopes (MM#8)
+                              one JSON line per agent completion/failure
 ```
 
-The orchestrator reads all seven files before synthesizing. Each file is produced
+The orchestrator reads all scratchpad files before synthesizing. Each file is produced
 independently, at different frequencies, by different agents. The scratchpad is the
 single shared state of the system.
+
+**Scratchpad access pattern:**
+- Worker agents **write** their own output files; they do not read sibling outputs.
+- The orchestrator **pre-fetches** all files in a bash step, then injects them into the
+  coordinator agent's prompt — the coordinator uses zero tools (MM#3 coordinator purity).
+- The Telegram `/status` command reads `health_summary.json` (written by orchestrator).
+- `task-notifications.jsonl` is append-only; never truncate it (audit trail).
 
 ---
 
@@ -393,6 +492,13 @@ recoverable**. A coordinator that has dispatched three workers and received two 
 does not need to restart from scratch if the third is interrupted. It can resume from
 exactly the state after the second result.
 
+**Coordinator mode persists across session resume.** `matchSessionMode()` reads the
+session's original mode from storage and sets `process.env.CLAUDE_CODE_COORDINATOR_MODE`
+before the first turn of the resumed session. Because `isCoordinatorMode()` reads that
+variable live on every invocation (no caching), the mode is fully restored with no
+manual intervention. A coordinator session that was interrupted mid-pipeline resumes as
+a coordinator — not as a standard agent that has forgotten its role.
+
 > **Key insight:** The corollary for orchestration design: break long pipelines into
 > explicit phases with observable intermediate state (Mental Model #10 — scratchpad).
 > An interrupted pipeline can always be resumed from its last committed scratchpad
@@ -418,6 +524,15 @@ deliberately before context-critical transitions (e.g., before starting a new ph
 of a long implementation, or before the verification step that needs specific earlier
 context). Think of it as a manual save point in a long game, not an emergency measure.
 
+**Use `CLAUDE_CODE_SIMPLE=1` to restrict workers in controlled environments.**
+
+Under `CLAUDE_CODE_SIMPLE=1`, all workers receive only Bash, Read, and Edit — the
+minimum viable tool set. Use this when deploying in restricted CI environments where
+filesystem access must be audited, or when the task domain is fully known and MCP
+tool access is unnecessary. It is a hard constraint: the coordinator's tool policy
+for all its workers becomes `{Bash, Read, Edit}` regardless of what individual worker
+prompts request.
+
 **Use `--fork-session` to branch from a past conversation state.**
 
 Every session is stored as JSONL. Three flags:
@@ -432,6 +547,68 @@ is preserved unchanged.
 
 ---
 
+## Mental Model #15 — An Agent Is a Policy Bundle, Not Just a Prompt
+
+The most common mistake in multi-agent system design is treating an agent as a prompt
+with some tools attached. A prompt is a necessary component, but it is not sufficient.
+Without explicit policies on the other four axes, you do not have an agent — you have
+a template with unpredictable behavior.
+
+A complete agent definition:
+
+```
+agent =
+  prompt           — what the agent knows, its goal, constraints, judgment guidance
+  + tool_policy    — which tools it may call, in which order, with what limits
+  + model_policy   — which model handles which sub-task (Haiku for classification,
+                     Sonnet for synthesis — never Opus at inference frequency)
+  + permission_policy — what it may write, delete, push, or call externally;
+                        what requires escalation; hard stops
+  + isolation_policy  — worktree / subprocess / shared context; blast radius if
+                        it goes wrong; what it can corrupt
+```
+
+**Why each axis matters:**
+
+`tool_policy` without definition means the agent may call any tool it judges useful —
+including destructive ones. In the forensic toolkit, the orchestrator has no write tools
+deliberately: it reads scratchpad files and issues GitHub CLI calls only. That is a
+tool policy.
+
+`model_policy` is an economic and quality contract. Routing classification to Haiku (fast,
+cheap, sufficient) and synthesis to Sonnet (capable) while banning Opus at inference
+frequency is a model policy. Without it, every agent defaults to the most expensive
+available model and costs spiral at scale.
+
+`permission_policy` defines escalation triggers and hard stops. The forensic toolkit's
+convention-audit agent is permitted to create GitHub issues but not to push commits or
+merge PRs. That boundary is a permission policy. Without it, automation autonomy has no
+ceiling.
+
+`isolation_policy` defines blast radius. A worktree agent that corrupts its branch
+affects only that branch. An agent with direct write access to main can corrupt production
+data. Isolation policy makes failure recoverable.
+
+> **Key insight:** When an agent behaves unpredictably in production, the cause is
+> almost always a missing or implicit policy on one of these four axes. Debug by asking:
+> "Which policy was undefined here?" — not "What was wrong with the prompt?"
+
+**From the forensic toolkit agent scripts:**
+
+```python
+# Each agent script explicitly declares its policy bundle:
+TOOL_POLICY   = ["Read", "Bash(gh cli only)", "Write(scratchpad only)"]
+MODEL_POLICY  = "claude-haiku-4-5 for classification; claude-sonnet-4-6 for synthesis"
+PERMISSION    = "may create issues; may NOT push, merge, or delete"
+ISOLATION     = "reads from $GITHUB_WORKSPACE/_scratchpad; writes to same; no repo writes"
+```
+
+This is documented in `scripts/agents/CONTEXT.md` and enforced by the system prompt of
+each agent script. When the CI runner spawns the orchestrator, it knows exactly what
+surface area that agent can touch.
+
+---
+
 ## Summary Checklist
 
 Before designing or extending any multi-agent system, verify:
@@ -439,7 +616,9 @@ Before designing or extending any multi-agent system, verify:
 - [ ] The coordinator synthesizes every worker result before acting — never passes through
 - [ ] Every agent prompt is a full briefing: goal, context, known constraints, judgment guidance
 - [ ] Context overlap was evaluated before choosing Continue vs. Spawn
-- [ ] Verification uses a fresh agent, separate from the implementer
+- [ ] Verification uses a fresh agent (not a fork), separate from the implementer
+- [ ] Verifier returns structured output (parseable by coordinator); checks are deterministic
+- [ ] Self-verification is treated as advisory input only — never used as an approval gate
 - [ ] Read tasks are parallelized; write tasks are serial per file set
 - [ ] The system prompt is split: large static prefix + small dynamic suffix
 - [ ] Worker results are internal signals; only outputs addressed to the user are external
@@ -452,6 +631,56 @@ Before designing or extending any multi-agent system, verify:
 - [ ] CLAUDE.md tiers are used for static context where possible — the framework loads them every turn without code wiring
 - [ ] Long pipelines store intermediate state to scratchpad so they can be resumed after an interrupt
 - [ ] `/compact` is triggered before context-critical phase transitions, not only when the window is full
+- [ ] Every agent is defined as a full policy bundle: prompt + tool_policy + model_policy + permission_policy + isolation_policy
+- [ ] Fork mode is used for shared-context parallelism; fresh specialist is used where independent judgment is required — these are never interchanged
+- [ ] Coordinator mode is activated and its 4-tool constraint (Agent, SendMessage, TaskStop, SyntheticOutput) is enforced — not just a convention
+- [ ] Workers report results via structured `<task-notification>` XML, not conversational prose — audit trail is automatic
+- [ ] The "Continue" path uses `SendMessage` with the worker's task ID; "Spawn" uses `Agent`
+- [ ] Session mode persistence is verified: a resumed coordinator session must re-activate coordinator mode, not default to standard agent mode
+
+---
+
+## Deployment Notes — Known Limitations
+
+### GitHub Actions Cron Latency (observed April 2026)
+
+GitHub Actions scheduled workflows (`on: schedule`) are **not real-time**. On busy days,
+a workflow scheduled for 00:00 UTC may not start for 60–90 minutes. This affects:
+
+- `telegram-bot.yml` (5-minute cron): Telegram commands may take up to 60+ min to execute
+  during periods of high GitHub Actions load. This is not a bug in the bot — it is a
+  platform constraint.
+- `tier2-triage.yml` (daily 09:00 KST): May fire at 09:30–10:30 KST instead.
+- `orchestrator.yml` (Mon + Thu 15:00 KST): First run of the week may be delayed.
+
+**Mitigation:** The Telegram bot supports `workflow_dispatch`, so all commands have an
+immediate manual fallback via `gh workflow run <workflow>.yml`. The `/triage`, `/test`,
+`/work`, and `/orchestrate` Telegram commands trigger `workflow_dispatch` (not cron),
+so they bypass the scheduling queue and execute within seconds of the API call.
+
+> **Design principle:** Never design agent-to-user SLAs around GitHub Actions cron.
+> Cron is for unattended daily runs; manual dispatch is for time-sensitive operations.
+> The Telegram command bot exists precisely to give real-time control independent of
+> the scheduling queue.
+
+### Telegram Bot Update_ID Bootstrap
+
+The bot stores `TELEGRAM_LAST_UPDATE_ID` as a GitHub Actions repository variable (requires
+`ECOSYSTEM_PAT` with `repo` scope — `GITHUB_TOKEN` does not have write access to variables).
+On first run (update_id=0), the bot marks the current tip without processing history, so
+old messages are not re-executed after first deployment.
+
+### Coordinator Zero-Tool Invariant
+
+`orchestrator_agent.py` runs with `allowed_tools=[]`. All scratchpad data and the
+open-issues list are pre-fetched in the `orchestrator.yml` step
+"Pre-fetch open issues for coordinator injection" and injected into the prompt. The agent
+never calls tools — it only synthesizes pre-injected JSON and outputs a code block.
+
+If a future developer re-adds tools to `allowed_tools` in `orchestrator_agent.py`, the
+coordinator purity principle (MM#3) is violated: the agent starts executing instead of
+coordinating, response latency increases, and synthesis quality degrades because the
+agent is doing two jobs simultaneously.
 
 ---
 

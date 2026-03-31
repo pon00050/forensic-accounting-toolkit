@@ -51,6 +51,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      - name: Pre-fetch open issues for coordinator injection
+        # MM#3 coordinator purity: the orchestrator agent has no tools.
+        # All data it needs must be fetched here and placed in _scratchpad/.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p _scratchpad
+          gh issue list \
+            --state open \
+            --label "agent-task" \
+            --json number,title,createdAt,labels \
+            --limit 50 \
+            > _scratchpad/open-issues.json 2>/dev/null \
+            || echo "[]" > _scratchpad/open-issues.json
+          echo "Open issues fetched: $(wc -l < _scratchpad/open-issues.json) chars"
+
       - name: Show available scratchpad files
         run: ls -la _scratchpad/ || echo "Scratchpad empty"
 
@@ -67,6 +84,8 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ github.token }}
           GITHUB_WORKSPACE: ${{ github.workspace }}
+          # MM#14: coordinator mode — agent receives pre-injected data, uses zero tools
+          CLAUDE_CODE_COORDINATOR_MODE: "true"
         run: python scripts/agents/orchestrator_agent.py
 
       - name: Upload orchestrator artifact

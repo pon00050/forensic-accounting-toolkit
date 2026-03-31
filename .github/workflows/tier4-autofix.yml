@@ -106,6 +106,17 @@ jobs:
           GITHUB_WORKSPACE: ${{ github.workspace }}
         run: python scripts/agents/fix_agent.py
 
+      - name: Run verify agent — independent post-fix verification (MM#5)
+        # Fresh Sonnet agent with no knowledge of fix_agent session (MM#5 gate).
+        # Runs full test suite independently and writes verify-result.json.
+        # PR creation is gated on verify-result.json status == "pass".
+        if: steps.parse.outputs.open_fix_prs == '0'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: python scripts/agents/verify_agent.py
+
       - name: Create PR if agent fixed the issue
         if: always() && steps.parse.outputs.open_fix_prs == '0'
         env:
@@ -128,6 +139,33 @@ jobs:
           repo = result.get("repo", "")
           summary = result.get("summary", "No summary.")
           changed = result.get("changed_files", [])
+
+          # MM#5 self-verification gate: PR requires independent verify_agent approval.
+          # fix_agent writes "self_verified"; verify_agent must confirm "pass".
+          verify_path = workspace / "_scratchpad" / "verify-result.json"
+          if verify_path.exists():
+              verify = json.loads(verify_path.read_text(encoding="utf-8"))
+              verify_status = verify.get("status", "unknown")
+              if verify_status == "skipped":
+                  # Verify skipped because fix_agent didn't self-verify — treat as needs_human
+                  print(f"[gate] verify_agent skipped (fix_agent status was {status}) — no PR")
+                  verify_status = "fail"
+              elif verify_status != "pass":
+                  print(f"[gate] verify_agent returned status={verify_status} — blocking PR")
+                  failed = verify.get("failed_tests", [])[:5]
+                  summary = f"Fix self-verified but verify_agent failed: {', '.join(failed) or 'see logs'}"
+                  status = "needs_human"
+                  changed = []
+              else:
+                  print(f"[gate] verify_agent PASS — proceeding to PR creation")
+                  # Elevate status from self_verified → fixed only after independent verification
+                  if status == "self_verified":
+                      status = "fixed"
+          else:
+              # verify-result.json absent means verify_agent didn't run (error)
+              print("[gate] verify-result.json missing — blocking PR (verify agent did not run)")
+              status = "needs_human"
+              changed = []
 
           if status != "fixed" or not changed:
               print(f"Status={status} — no PR to create")
