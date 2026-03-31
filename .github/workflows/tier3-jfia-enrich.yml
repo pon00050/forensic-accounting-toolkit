@@ -1,0 +1,286 @@
+name: "Tier 3 — jfia-catalog Enrichment (PDF → Sonnet)"
+
+# Downloads PDFs for jfia-catalog articles missing abstract/keywords,
+# extracts text from the first pages using pdfplumber, then uses Sonnet
+# to pull the verbatim abstract and keywords out of the paper text.
+# PRs the enriched jfia_catalog.json to pon00050/jfia-catalog.
+#
+# Runs monthly (1st of month) and on demand. All logic lives in the hub;
+# jfia-catalog repo itself is untouched except for the data PR.
+#
+# Cost estimate: ~$0.002 per article (Sonnet input+output at ~600 tokens).
+# 333 missing fields × $0.002 ≈ $0.67 per full run. Hard cap: $3.00.
+
+on:
+  schedule:
+    - cron: "0 2 1 * *"   # 1st of each month, 11:00 KST
+  workflow_dispatch:
+    inputs:
+      max_articles:
+        description: "Max articles to process per run (default 60)"
+        default: "60"
+      dry_run:
+        description: "Dry run — log what would be enriched without writing or PRing (true/false)"
+        default: "false"
+      priority:
+        description: "Which gap to prioritize: 'both' (missing abstract+keywords first), 'abstract', 'keywords'"
+        default: "both"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  enrich:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout hub
+        uses: actions/checkout@v4
+
+      - name: Checkout jfia-catalog
+        uses: actions/checkout@v4
+        with:
+          repository: pon00050/jfia-catalog
+          path: _jfia-catalog
+          token: ${{ secrets.ECOSYSTEM_PAT != '' && secrets.ECOSYSTEM_PAT || github.token }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install enrichment dependencies
+        run: pip install pdfplumber requests anthropic
+
+      - name: Run enrichment pipeline
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MAX_ARTICLES: ${{ github.event.inputs.max_articles || '60' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          PRIORITY: ${{ github.event.inputs.priority || 'both' }}
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: python3 scripts/ci/enrich_jfia_catalog.py
+
+      - name: Create PR to jfia-catalog if enrichments found
+        if: github.event.inputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.ECOSYSTEM_PAT != '' && secrets.ECOSYSTEM_PAT || github.token }}
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, os, subprocess, sys
+          from pathlib import Path
+
+          ws = Path(os.environ["GITHUB_WORKSPACE"])
+          result_path = ws / "_scratchpad" / "jfia-enrich-result.json"
+          if not result_path.exists():
+              print("No enrich result — pipeline did not complete")
+              sys.exit(0)
+
+          result = json.loads(result_path.read_text())
+          enriched = result.get("enriched", 0)
+          if enriched == 0:
+              print(f"No articles enriched — skipping PR. Failed: {result.get('failed', 0)}, no_data: {result.get('no_data_found', 0)}")
+              sys.exit(0)
+
+          target = ws / "_jfia-catalog"
+          run_id = os.environ.get("GITHUB_RUN_ID", "0")
+          branch = f"enrich/jfia-catalog-{run_id}"
+          token = os.environ.get("GH_TOKEN", "")
+          run_url = (
+              f"{os.environ.get('GITHUB_SERVER_URL', 'https://github.com')}/"
+              f"{os.environ.get('GITHUB_REPOSITORY', '')}/"
+              f"actions/runs/{run_id}"
+          )
+
+          # Commit the enriched catalog
+          for cmd in [
+              ["git", "-C", str(target), "config", "user.name", "github-actions[bot]"],
+              ["git", "-C", str(target), "config", "user.email",
+               "github-actions[bot]@users.noreply.github.com"],
+              ["git", "-C", str(target), "checkout", "-b", branch],
+              ["git", "-C", str(target), "add", "jfia_catalog.json"],
+          ]:
+              subprocess.run(cmd, check=True)
+
+          staged = subprocess.run(
+              ["git", "-C", str(target), "diff", "--cached", "--quiet"],
+              capture_output=True,
+          )
+          if staged.returncode == 0:
+              print("No staged changes — catalog unchanged despite enriched > 0 (dry-run path?)")
+              sys.exit(0)
+
+          commit_msg = (
+              f"data: enrich {enriched} articles — "
+              f"LLM abstract/keyword extraction from PDF\n\n"
+              f"abstracts_added: {result.get('abstracts_added', 0)}\n"
+              f"keywords_added: {result.get('keywords_added', 0)}\n"
+              f"api_cost_usd: {result.get('total_cost_usd', 0):.4f}"
+          )
+          subprocess.run(
+              ["git", "-C", str(target), "commit", "-m", commit_msg], check=True
+          )
+          subprocess.run(
+              ["git", "-C", str(target), "remote", "set-url", "origin",
+               f"https://x-access-token:{token}@github.com/pon00050/jfia-catalog"],
+              check=True,
+          )
+          push = subprocess.run(
+              ["git", "-C", str(target), "push", "origin", branch],
+              capture_output=True, text=True,
+          )
+          if push.returncode != 0:
+              print(f"Push failed: {push.stderr.strip()}")
+              print("ECOSYSTEM_PAT may not cover jfia-catalog — cannot create PR")
+              sys.exit(0)
+
+          # Build PR body with per-article breakdown
+          abstracts_added = result.get("abstracts_added", 0)
+          keywords_added = result.get("keywords_added", 0)
+          failed = result.get("failed", 0)
+          no_data = result.get("no_data_found", 0)
+          cost = result.get("total_cost_usd", 0)
+
+          # Sample of enriched articles for PR body (first 10)
+          samples = [r for r in result.get("results", []) if r.get("status") == "enriched"][:10]
+          sample_lines = "\n".join(
+              f"- {r['title'][:70]}"
+              + (" ✚abstract" if r.get("abstract_added") else "")
+              + (" ✚keywords" if r.get("keywords_added") else "")
+              for r in samples
+          )
+          if len([r for r in result.get("results", []) if r.get("status") == "enriched"]) > 10:
+              sample_lines += f"\n- _(and {enriched - 10} more…)_"
+
+          pr_body = f"""## jfia-catalog Enrichment — {enriched} articles filled
+
+PDF text extraction + Sonnet verbatim extraction for articles with missing abstract or keywords.
+
+| Metric | Value |
+|--------|-------|
+| Articles enriched | {enriched} |
+| Abstracts added | {abstracts_added} |
+| Keywords added | {keywords_added} |
+| PDF extraction failures | {failed} |
+| No data found in PDF | {no_data} |
+| Sonnet API cost | ${cost:.4f} |
+
+### Method
+1. Download article PDF from S3 (`web.nacva.com`)
+2. Extract text from first 3 pages via `pdfplumber`
+3. Prompt Sonnet to extract verbatim abstract and keywords (no paraphrasing)
+4. Only write if Sonnet found real content — null fields left as-is
+
+### Sample enriched articles
+{sample_lines}
+
+### What was NOT changed
+- Articles that already had abstracts/keywords are untouched
+- Existing field values are never overwritten
+- `scraped_at` and all structural metadata are unchanged
+
+---
+🤖 Auto-generated by [tier3-jfia-enrich.yml]({run_url})
+"""
+
+          pr = subprocess.run(
+              [
+                  "gh", "pr", "create",
+                  "--repo", "pon00050/jfia-catalog",
+                  "--title", f"data: enrich {enriched} articles — PDF→Sonnet abstract/keyword extraction",
+                  "--body", pr_body,
+                  "--base", "master",
+                  "--head", branch,
+              ],
+              capture_output=True, text=True,
+          )
+          pr_url = pr.stdout.strip() or pr.stderr.strip()
+          print(f"PR created: {pr_url}")
+
+          # Write result for potential Telegram notification (reuses Tier 4 pattern)
+          (ws / "_scratchpad" / "enrich-pr-result.json").write_text(
+              json.dumps({
+                  "status": "enriched",
+                  "repo": "jfia-catalog",
+                  "enriched": enriched,
+                  "abstracts_added": abstracts_added,
+                  "keywords_added": keywords_added,
+                  "cost_usd": cost,
+                  "pr_url": pr_url,
+              })
+          )
+          PYEOF
+
+      - name: Telegram notification
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "Telegram not configured — skipping"
+            exit 0
+          fi
+          python3 - <<'PYEOF'
+          import json, os, urllib.parse, urllib.request
+          from pathlib import Path
+
+          token   = os.environ["TELEGRAM_BOT_TOKEN"]
+          chat_id = os.environ["TELEGRAM_CHAT_ID"]
+          ws      = Path(os.environ["GITHUB_WORKSPACE"])
+          run_url = (f"{os.environ.get('GITHUB_SERVER_URL','https://github.com')}/"
+                     f"{os.environ.get('GITHUB_REPOSITORY','')}/"
+                     f"actions/runs/{os.environ.get('GITHUB_RUN_ID','0')}")
+
+          pr_path = ws / "_scratchpad" / "enrich-pr-result.json"
+          result_path = ws / "_scratchpad" / "jfia-enrich-result.json"
+
+          if pr_path.exists():
+              d = json.loads(pr_path.read_text())
+              pr_url = d.get("pr_url", "")
+              text = (
+                  f"✅ *jfia-catalog enriched*\n"
+                  f"{d['enriched']} articles updated "
+                  f"({d['abstracts_added']} abstracts, {d['keywords_added']} keywords)\n"
+                  f"Cost: ${d['cost_usd']:.4f}\n"
+                  f"[View PR]({pr_url})"
+              )
+          elif result_path.exists():
+              d = json.loads(result_path.read_text())
+              if d.get("enriched", 0) == 0:
+                  text = (
+                      f"ℹ️ *jfia-catalog enrichment — no articles updated*\n"
+                      f"Failed PDFs: {d.get('failed',0)} | No data found: {d.get('no_data_found',0)}\n"
+                      f"[Logs]({run_url})"
+                  )
+              else:
+                  text = f"ℹ️ *jfia-catalog enrichment complete (no PR)*\n[Logs]({run_url})"
+          else:
+              text = f"⚠️ *jfia-catalog enrichment failed*\n[Logs]({run_url})"
+
+          data = urllib.parse.urlencode({
+              "chat_id": chat_id, "text": text,
+              "parse_mode": "Markdown", "disable_web_page_preview": "true",
+          }).encode()
+          try:
+              with urllib.request.urlopen(
+                  urllib.request.Request(
+                      f"https://api.telegram.org/bot{token}/sendMessage", data=data
+                  ), timeout=10
+              ) as r:
+                  print("Telegram sent:", r.status)
+          except Exception as e:
+              print(f"Telegram failed (non-critical): {e}")
+          PYEOF
+
+      - name: Upload scratchpad
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scratchpad-jfia-enrich-${{ github.run_id }}
+          path: _scratchpad/
+          retention-days: 30
+          if-no-files-found: ignore
