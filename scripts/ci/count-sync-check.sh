@@ -46,14 +46,19 @@ for repo in "${!TEST_RUNNERS[@]}"; do
     fi
     runner="${TEST_RUNNERS[$repo]}"
     cd "$rpath"
-    # Collect test count — capture full output; || true prevents set -e exit on
-    # non-zero exit codes (collection errors, missing venv, import failures).
-    count_output=$(eval "$runner tests/ --co -q 2>/dev/null" || true)
+    # Capture both stdout and stderr — 2>/dev/null was hiding real collection
+    # errors (uv venv not set up, missing deps, import failures) and making
+    # genuine failures indistinguishable from "0 tests". The grep below only
+    # matches the "N tests collected" line, so stderr noise doesn't corrupt
+    # the count; it just becomes visible in the workflow log.
+    count_output=$(eval "$runner tests/ --co -q 2>&1" || true)
     # Parse the "N tests collected" line from anywhere in the output.
-    # Using tail-2|head-1 was wrong: it picks up a test name, not the count line.
     actual=$(echo "$count_output" | grep -oP '^\d+(?= tests? collected)' | tail -1 || true)
     if [ -z "$actual" ] || [ "$actual" = "0" ]; then
-        # Treat as collection failure, not a genuine zero-test count
+        # Treat as collection failure, not a genuine zero-test count.
+        # Log the tail of collection output so the workflow log shows why.
+        echo "  [count-sync] COLLECTION FAILED for $repo — last output lines:"
+        echo "$count_output" | tail -6 | sed 's/^/    /'
         COLLECTION_FAILED[$repo]=1
         actual=0
     fi

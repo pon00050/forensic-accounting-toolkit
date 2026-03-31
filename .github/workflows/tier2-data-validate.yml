@@ -4,6 +4,8 @@ on:
   workflow_run:
     workflows: ["Tier 3 — Pipeline Runner"]
     types: [completed]
+  schedule:
+    - cron: "0 22 * * *"   # 07:00 KST daily — validates parquet freshness even on non-pipeline days
   workflow_dispatch:
 
 permissions:

@@ -51,12 +51,17 @@ jobs:
             rpath="$PARENT/$repo"
             if [ -d "$rpath" ] && [ -f "$rpath/pyproject.toml" ]; then
               cd "$rpath"
-              uv sync 2>/dev/null || true
+              # --quiet suppresses progress bars; surface real errors as
+              # workflow warnings so we know exactly why collection fails.
+              uv sync --quiet || echo "::warning::uv sync failed for $repo — test collection will return 0 for this repo"
               cd "$GITHUB_WORKSPACE"
             fi
           done
-          # kr-company-registry uses bare pytest
+          # kr-company-registry uses bare pytest; install package too so
+          # test imports resolve correctly during collection.
           pip install pytest 2>/dev/null || true
+          PARENT="$(dirname "$GITHUB_WORKSPACE")"
+          pip install -e "$PARENT/kr-company-registry" 2>/dev/null || true
 
       - name: Run count-sync check
         run: bash scripts/ci/count-sync-check.sh
