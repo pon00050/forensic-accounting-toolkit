@@ -21,10 +21,15 @@ Tier 1 (bash)   ──►  Orchestrator    ──►  Tier 4 (Sonnet)      Issue
                      (Sonnet)              ▲                    Escalation
                           │                │
                           ▼ sync           │ /work dispatch
-                     LIVE_CONTEXT    Team Leader (Opus) ◄── Telegram
-                     GHA variable         ▲
-                                          │ memory:all (KV)
-                                     Persistent memory
+                     LIVE_CONTEXT    Team Leader        ◄── Telegram
+                     GHA variable    (Sonnet default /
+                          │          Opus on !!)
+                          │               ▲
+                          │               │ memory:all (KV)
+                          │          Persistent memory
+                          │               │
+                     CF AI Gateway ───────┘
+                     (Anthropic proxy)
 ```
 
 ---
@@ -164,9 +169,17 @@ CF Worker — Team Leader (Opus 4.6)
 ### Cloudflare Worker (`cloudflare-worker/bot.js`)
 
 The team leader — not a command router. Every non-command message is processed
-by Opus 4.6 with full project context. Opus can discuss strategy, answer
-technical questions from the system prompt, and suggest which slash command to
-use for deeper work.
+with full project context. The model is **Sonnet 4.6 by default**; prefix any
+message with `!!` to escalate to **Opus 4.6** for deep strategic analysis.
+Sonnet handles status queries, short tactical questions, and routine discussion
+at 5× lower cost. Opus is reserved for architectural tradeoffs, complex
+synthesis, and deliberate deep-dives.
+
+**CF AI Gateway routing:** All Anthropic API calls are proxied through
+`gateway.ai.cloudflare.com` (account `cb953826693a82080f5b64551e0d6ebb`,
+gateway `default`). Direct calls to `api.anthropic.com` are blocked by
+Anthropic's WAF for Cloudflare Workers datacenter egress IPs. The gateway
+auto-created on first authenticated request (`CF_AIG_TOKEN`).
 
 **Team leader system prompt (three-tier):**
 - **Tier 1 — Static vision** (~2,000 tokens, hardcoded in `bot.js`): Phase 1-5
@@ -182,10 +195,18 @@ use for deeper work.
 4-hour TTL. `/clear` deletes it. Slashes commands are recorded in history so
 the leader has context for follow-up questions.
 
-**Auto-save memory:** Opus appends `>>SAVE: category | content` to a response
-when something is worth remembering; the Worker strips the tag, persists the
-memory to `memory:all`, and sends only the clean reply to the user.
-`>>FORGET: id` removes an entry. User can also use `/remember` and `/forget`.
+**Auto-save memory:** The model appends `>>SAVE: category | content` to a
+response when something is worth remembering; the Worker strips the tag,
+persists the memory to `memory:all`, and sends only the clean reply to the
+user. `>>FORGET: id` removes an entry. User can also use `/remember` and
+`/forget`.
+
+**Prompt caching:** The static `SYSTEM_PROMPT` block (~2,000 tokens) is sent
+with `cache_control: ephemeral` via the `anthropic-beta: prompt-caching-2024-07-31`
+header. Cached tokens cost 10% of normal ($1.50/1M vs $15/1M for Opus;
+$0.30/1M vs $3/1M for Sonnet). Any second message within a 5-minute window
+recovers the cache write cost and saves on every subsequent message in the
+burst.
 
 ### Live Context Sync (`sync-context-to-kv.yml`)
 
@@ -231,7 +252,8 @@ The CF Worker reads `LIVE_CONTEXT` from the GitHub API using its existing
 | `/reject repo/PR` | GHA | Closes autofix PR with comment | ~45 sec |
 | `/errors` | GHA | Last 3 failures across all 13 repos with log links | ~45 sec |
 | `/ask <question>` | GHA | Sonnet deep search across all repos | ACK <1s, result ~1 min |
-| _(any text)_ | CF Worker | Opus team leader responds with full context | 5–15 sec |
+| _(any text)_ | CF Worker | Sonnet team leader responds with full context | 5–10 sec |
+| _(!! text)_ | CF Worker | Opus team leader — deep strategic analysis | 10–20 sec |
 
 ### Proactive notifications (push, not pull)
 
@@ -352,15 +374,38 @@ Used by every tier1 workflow.
 
 | Task type | Model | Rationale |
 |-----------|-------|-----------|
-| Team leader conversation | `claude-opus-4-6` | Strategic reasoning, open-ended discussion, ~50 msgs/day — cost approved (~$30/mo) |
+| Team leader — default conversation | `claude-sonnet-4-6` | Status queries, tactical questions, routine discussion. 5× cheaper than Opus. |
+| Team leader — deep analysis (`!!` prefix) | `claude-opus-4-6` | Architectural tradeoffs, complex synthesis, deliberate strategic work. User opt-in only. |
 | Scan synthesis (triage, data validation) | `claude-haiku-4-5-20251001` | High-volume, structured output, cost-sensitive |
 | Deep analysis (convention audit, orchestrator) | `claude-sonnet-4-6` | Reasoning across 13 repos, cross-reference |
 | Code fixes | `claude-sonnet-4-6` | Root-cause diagnosis + targeted edit |
 | Pipeline execution | `claude-sonnet-4-6` | Long multi-step task, 40 turns, $5 budget |
 | Codebase search (`/ask`) | `claude-sonnet-4-6` | Open-ended research, full repo context |
 
-**Routing rule:** Opus for low-volume strategic conversation; Sonnet for autonomous
-multi-step agent tasks; Haiku for high-volume structured classification.
+**Routing rule:** Sonnet default for all team leader conversation; `!!` prefix
+escalates to Opus; Sonnet for autonomous multi-step agent tasks; Haiku for
+high-volume structured classification.
+
+## Cost Model
+
+| Scenario | msgs/day | Monthly CF Worker | Monthly GHA agents | Total |
+|----------|----------|------------------|-------------------|-------|
+| Light use (mostly Sonnet) | 15 | ~$10–15 | ~$5–10 | **~$15–25/mo** |
+| Moderate use (mostly Sonnet, occasional `!!`) | 30 | ~$25–35 | ~$5–15 | **~$30–50/mo** |
+| Heavy use (all Sonnet) | 50 | ~$35–45 | ~$10–15 | **~$45–60/mo** |
+| Heavy use (all Opus via `!!`) | 50 | ~$110–140 | ~$10–15 | **~$120–155/mo** |
+
+**Unit economics (Sonnet 4.6):** ~$3/1M input, $15/1M output. Per message with
+3,000-token system prompt + 1,000-token history + 500-token response: ~$0.018.
+With prompt caching on 70% of messages: ~$0.013/message.
+
+**Unit economics (Opus 4.6):** ~$15/1M input, $75/1M output. Per message:
+~$0.09 base; with prompt caching: ~$0.065/message.
+
+**Prompt caching impact:** The cached `SYSTEM_PROMPT` block (~2,000 tokens)
+saves ~67% on system prompt tokens for any message after the first in a
+5-minute window. GHA agents also use `CONTEXT.md` as a shared cache prefix
+(Principle #7 in `_sdk_helpers.py`).
 
 ---
 
@@ -378,7 +423,8 @@ multi-step agent tasks; Haiku for high-volume structured classification.
 
 | Secret | Purpose |
 |--------|---------|
-| `ANTHROPIC_API_KEY` | Opus 4.6 calls for team leader responses (~$30/mo at 50 msgs/day) |
+| `ANTHROPIC_API_KEY` | Sonnet/Opus calls for team leader responses |
+| `CF_AIG_TOKEN` | Cloudflare AI Gateway auth token (AI Gateway Run scope) — required to route through `gateway.ai.cloudflare.com`; auto-creates the `default` gateway on first use |
 | `TELEGRAM_BOT_TOKEN` | Bot token from @BotFather |
 | `TELEGRAM_CHAT_ID` | Authorized chat ID |
 | `GITHUB_TOKEN` | Same value as `ECOSYSTEM_PAT` — dispatches GHA workflows and reads `LIVE_CONTEXT` variable |
@@ -422,5 +468,5 @@ Deterministic fixes (count drift, hub doc drift) skip the PR entirely:
 | Board access in CI (`gh project` requires `project` OAuth scope) | falls back to `board-snapshot.json` (exported at local session end); `/board` command uses same fallback | Configure PAT with `project` scope |
 | Convention drift autofix (structural missing files) | detected, dispatched to tier4 | tier4 handles via STUB/CONVENTION_DRIFT categories |
 | `LIVE_CONTEXT` variable not yet populated (first run) | leader says "(no live context synced yet — run /orchestrate to populate)" | Run `/orchestrate` once to seed it |
-| Opus conversation history expires after 4 hours of inactivity | restarts from seeded `memory:all`; no conversation continuity loss for facts/decisions, only small talk | By design — memories persist what matters |
+| Conversation history expires after 4 hours of inactivity | restarts from seeded `memory:all`; no continuity loss for facts/decisions, only small talk | By design — memories persist what matters |
 | Reasoning-required fixes that need external data (SEIBRO, API keys) | agent writes needs_human | Human handles per task ownership rules |
