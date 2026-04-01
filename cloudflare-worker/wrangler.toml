@@ -1,0 +1,13 @@
+name = "forensic-toolkit-bot"
+main = "bot.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# Non-secret config
+[vars]
+GITHUB_REPO = "pon00050/forensic-accounting-toolkit"
+
+# Secrets — set these via CLI (never commit):
+#   wrangler secret put TELEGRAM_BOT_TOKEN
+#   wrangler secret put TELEGRAM_CHAT_ID
+#   wrangler secret put GITHUB_TOKEN        (use your ECOSYSTEM_PAT value)
