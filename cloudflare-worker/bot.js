@@ -303,12 +303,16 @@ async function chatWithLeader(env, chat_id, userMessage) {
 
   let reply;
   try {
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s hard limit
+    const resp = await fetch("https://gateway.ai.cloudflare.com/v1/cb953826693a82080f5b64551e0d6ebb/default/anthropic/v1/messages", {
       method: "POST",
+      signal: controller.signal,
       headers: {
         "x-api-key": env.ANTHROPIC_API_KEY,
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
+        "cf-aig-authorization": `Bearer ${env.CF_AIG_TOKEN}`,
       },
       body: JSON.stringify({
         model: "claude-opus-4-6",
@@ -317,6 +321,7 @@ async function chatWithLeader(env, chat_id, userMessage) {
         messages: history,
       }),
     });
+    clearTimeout(timeoutId);
 
     if (!resp.ok) {
       const err = await resp.text();
@@ -329,9 +334,11 @@ async function chatWithLeader(env, chat_id, userMessage) {
     const data = await resp.json();
     reply = data.content?.[0]?.text ?? "Sorry, I couldn't generate a response.";
   } catch (e) {
-    console.error("chatWithLeader error:", e);
-    await tgSend(env, chat_id,
-      "Request failed. Try again, or use /ask for deep search.");
+    console.error("chatWithLeader error:", e?.name, e?.message);
+    const msg = e?.name === "AbortError"
+      ? "Response took too long (>25s). Try a shorter question, or use /ask for deep search."
+      : "Request failed. Try again, or use /ask for deep search.";
+    await tgSend(env, chat_id, msg);
     return;
   }
 
