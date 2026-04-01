@@ -156,6 +156,158 @@ jobs:
               except Exception as e:
                   return f"Status fetch error: {e}"
 
+          # ── Work dispatch ────────────────────────────────────────────────────
+
+          def dispatch_next_work_item(chat_id):
+              """Find top P0/P1 actionable brief from latest orchestrator run and dispatch tier4."""
+              try:
+                  r = subprocess.run([
+                      "gh", "api",
+                      f"repos/{REPO}/actions/artifacts?name=scratchpad-orchestrator&per_page=1",
+                      "--jq", ".artifacts[0].id // empty",
+                  ], capture_output=True, text=True)
+                  artifact_id = r.stdout.strip()
+                  if not artifact_id:
+                      return False
+
+                  subprocess.run([
+                      "gh", "api",
+                      f"repos/{REPO}/actions/artifacts/{artifact_id}/zip",
+                      "--header", "Accept: application/vnd.github.v3+json",
+                  ], capture_output=True,
+                     stdout=open("/tmp/work_artifact.zip", "wb"))
+                  subprocess.run(
+                      ["unzip", "-o", "/tmp/work_artifact.zip", "-d", "/tmp/work/"],
+                      capture_output=True,
+                  )
+
+                  orch_path = Path("/tmp/work/orchestrator.json")
+                  if not orch_path.exists():
+                      return False
+
+                  data = json.loads(orch_path.read_text())
+                  briefs = data.get("action_briefs", [])
+                  dispatchable = {"CONVENTION_DRIFT", "STUB", "DOC_DRIFT", "COUNT_DRIFT", "TEST_FAIL"}
+                  for brief in briefs:
+                      if (not brief.get("ai_actionable") or
+                              brief.get("priority") not in ("P0", "P1") or
+                              brief.get("category") not in dispatchable):
+                          continue
+                      repo_name = brief.get("repo", "")
+                      if not repo_name:
+                          continue
+                      # Skip if open autofix PR already exists
+                      open_prs = subprocess.run([
+                          "gh", "pr", "list", "--repo", f"pon00050/{repo_name}",
+                          "--state", "open", "--json", "headRefName",
+                          "--jq", '[.[] | select(.headRefName | startswith("autofix/"))] | length',
+                      ], capture_output=True, text=True).stdout.strip()
+                      if open_prs and open_prs != "0":
+                          continue
+                      payload = json.dumps({
+                          "event_type": "agent-fix",
+                          "client_payload": {
+                              "priority": brief.get("priority"),
+                              "category": brief.get("category"),
+                              "repo": repo_name,
+                              "description": brief.get("change", ""),
+                              "file": brief.get("file"),
+                              "line": brief.get("line"),
+                              "ai_actionable": True,
+                              "brief_id": brief.get("id", ""),
+                          }
+                      })
+                      r2 = subprocess.run(
+                          ["gh", "api", f"repos/{REPO}/dispatches",
+                           "--method", "POST", "--input", "-"],
+                          input=payload, text=True, capture_output=True,
+                      )
+                      if r2.returncode == 0:
+                          tg_send(chat_id,
+                              f"🔧 Fixing `{repo_name}` [{brief.get('category')}]\n"
+                              f"{brief.get('change','')[:100]}\n_Results in ~5 min_")
+                          return True
+                      else:
+                          tg_send(chat_id, f"Dispatch failed: {r2.stderr.strip()[:200]}")
+                          return False
+
+                  tg_send(chat_id,
+                      "No actionable P0/P1 items in last orchestrator run.\n"
+                      "Run /orchestrate to synthesize fresh work.")
+                  return False
+              except Exception:
+                  return False
+
+          # ── PR approve / reject ──────────────────────────────────────────────
+
+          def handle_pr(cmd, args, chat_id):
+              """Handle /approve or /reject with a PR reference (repo/number or full URL)."""
+              if not args:
+                  tg_send(chat_id,
+                      f"Usage: `{cmd} repo/pr-number`\nExample: `{cmd} kr-beneish/5`")
+                  return
+              ref = args.strip()
+              if ref.startswith("https://github.com/"):
+                  parts = ref.replace("https://github.com/", "").split("/")
+                  if len(parts) >= 4 and parts[2] == "pull":
+                      repo_name, pr_num = parts[1], parts[3]
+                  else:
+                      tg_send(chat_id, "Could not parse URL. Use `repo/pr-number` format.")
+                      return
+              elif "/" in ref:
+                  repo_name, pr_num = ref.split("/", 1)
+              else:
+                  tg_send(chat_id, f"Usage: `{cmd} repo/pr-number`")
+                  return
+
+              if cmd == "/approve":
+                  r = subprocess.run([
+                      "gh", "pr", "merge", pr_num,
+                      "--squash", "--delete-branch",
+                      "--repo", f"pon00050/{repo_name}",
+                  ], capture_output=True, text=True)
+                  if r.returncode == 0:
+                      tg_send(chat_id, f"✅ `{repo_name}` PR #{pr_num} merged.")
+                  else:
+                      tg_send(chat_id, f"Merge failed: {r.stderr.strip()[:200]}")
+              else:
+                  r = subprocess.run([
+                      "gh", "pr", "close", pr_num,
+                      "--comment", "Rejected via Telegram.",
+                      "--repo", f"pon00050/{repo_name}",
+                  ], capture_output=True, text=True)
+                  if r.returncode == 0:
+                      tg_send(chat_id, f"✅ `{repo_name}` PR #{pr_num} closed.")
+                  else:
+                      tg_send(chat_id, f"Close failed: {r.stderr.strip()[:200]}")
+
+          # ── Error summary ────────────────────────────────────────────────────
+
+          def get_recent_errors():
+              """Return a short summary of the last 3 failed workflow runs."""
+              try:
+                  r = subprocess.run([
+                      "gh", "run", "list",
+                      "--repo", REPO,
+                      "--json", "name,conclusion,url,createdAt",
+                      "--limit", "20",
+                  ], capture_output=True, text=True)
+                  if r.returncode != 0:
+                      return "Could not fetch workflow runs."
+                  runs = json.loads(r.stdout)
+                  failed = [x for x in runs if x.get("conclusion") == "failure"][:3]
+                  if not failed:
+                      return "✅ No recent workflow failures."
+                  lines = ["*Recent failures:*"]
+                  for f in failed:
+                      name = f.get("name", "?")[:45]
+                      date = f.get("createdAt", "")[:10]
+                      url = f.get("url", "")
+                      lines.append(f"• {name} ({date})\n  [Logs]({url})")
+                  return "\n".join(lines)
+              except Exception as e:
+                  return f"Error fetching runs: {e}"
+
           # ── Help text ────────────────────────────────────────────────────────
 
           HELP_TEXT = (
@@ -164,15 +316,20 @@ jobs:
               "/status — latest ecosystem health score\n"
               "/triage — run triage scan (~2 min)\n"
               "/test — run all 11 repo test suites (~10 min)\n"
-              "/work — pick top AI task and execute it (~20 min)\n"
-              "/orchestrate — full coordinator run (~5 min)\n"
+              "/work — dispatch next P0/P1 fix immediately\n"
+              "/orchestrate — full coordinator run + auto-dispatch (~5 min)\n"
+              "/approve <repo/PR> — merge an autofix PR\n"
+              "/reject <repo/PR> — close an autofix PR\n"
+              "/errors — show recent workflow failures\n"
               "/help — this message"
           )
 
           # ── Command router ───────────────────────────────────────────────────
 
-          def route(cmd, chat_id):
-              cmd = cmd.strip().split("@")[0].lower()  # strip bot mention
+          def route(full_text, chat_id):
+              parts = full_text.strip().split(None, 1)
+              cmd = parts[0].split("@")[0].lower()  # strip bot mention
+              args = parts[1].strip() if len(parts) > 1 else ""
 
               if cmd in ("/help", "/start"):
                   tg_send(chat_id, HELP_TEXT)
@@ -195,13 +352,32 @@ jobs:
                   else:
                       tg_send(chat_id, f"Dispatch failed: {err[:200]}")
 
-              elif cmd in ("/work", "/orchestrate"):
+              elif cmd == "/orchestrate":
                   ok, err = gh_workflow_run("orchestrator.yml")
                   if ok:
-                      label = "Work session" if cmd == "/work" else "Orchestrator"
-                      tg_send(chat_id, f"{label} started. Full report in ~5 min.")
+                      tg_send(chat_id, "Orchestrator started. Full report in ~5 min.")
                   else:
                       tg_send(chat_id, f"Dispatch failed: {err[:200]}")
+
+              elif cmd == "/work":
+                  tg_send(chat_id, "Looking for top AI task...")
+                  dispatched = dispatch_next_work_item(chat_id)
+                  if not dispatched:
+                      ok, err = gh_workflow_run("orchestrator.yml")
+                      if ok:
+                          tg_send(chat_id, "No cached brief — orchestrator started to find work.")
+                      else:
+                          tg_send(chat_id, f"Dispatch failed: {err[:200]}")
+
+              elif cmd == "/approve":
+                  handle_pr(cmd, args, chat_id)
+
+              elif cmd == "/reject":
+                  handle_pr(cmd, args, chat_id)
+
+              elif cmd == "/errors":
+                  tg_send(chat_id, "Fetching recent failures...")
+                  tg_send(chat_id, get_recent_errors())
 
               else:
                   tg_send(chat_id, f"Unknown: `{cmd}`\nSend /help for commands.")

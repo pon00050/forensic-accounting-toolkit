@@ -323,3 +323,53 @@ jobs:
 
           print(f"Dispatched {dispatched} agent-fix event(s)")
           PYEOF
+
+      - name: Telegram failure alert
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "Telegram not configured — skipping"
+            exit 0
+          fi
+          python3 - <<'PYEOF'
+          import json, os, urllib.parse, urllib.request
+          from pathlib import Path
+
+          token   = os.environ["TELEGRAM_BOT_TOKEN"]
+          chat_id = os.environ["TELEGRAM_CHAT_ID"]
+
+          path = Path("_scratchpad/test-results.json")
+          if not path.exists():
+              print("No test-results.json — skipping notification")
+              exit(0)
+
+          data = json.loads(path.read_text())
+          failed = [r for r, v in data.get("results", {}).items() if v == "FAIL"]
+          if not failed:
+              print("All tests passed — no Telegram alert needed")
+              exit(0)
+
+          run_url = (f"{os.environ.get('GITHUB_SERVER_URL','https://github.com')}/"
+                     f"{os.environ.get('GITHUB_REPOSITORY','')}/"
+                     f"actions/runs/{os.environ.get('GITHUB_RUN_ID','0')}")
+          text = (f"🚨 *Test failures detected*\n"
+                  f"Failed: {', '.join(f'`{r}`' for r in failed)}\n"
+                  f"[View logs]({run_url})")
+
+          enc = urllib.parse.urlencode({
+              "chat_id": chat_id, "text": text,
+              "parse_mode": "Markdown", "disable_web_page_preview": "true",
+          }).encode()
+          try:
+              with urllib.request.urlopen(
+                  urllib.request.Request(
+                      f"https://api.telegram.org/bot{token}/sendMessage", enc
+                  ), timeout=10
+              ) as r:
+                  print("Telegram sent:", r.status)
+          except Exception as e:
+              print(f"Telegram failed (non-critical): {e}")
+          PYEOF
