@@ -125,6 +125,58 @@ picture and creates specific, file-level action briefs.
 
 ---
 
+## Human Control Layer — Telegram Bot
+
+The human controls the agent team from a phone via Telegram. The architecture
+uses a **webhook** (not polling) so commands are received instantly.
+
+### Components
+
+**Cloudflare Worker** (`cloudflare-worker/bot.js`, `pon00050.workers.dev`)
+- Receives Telegram webhook POSTs immediately when a message is sent
+- Handles `/help` directly (no GitHub Actions involved — sub-second response)
+- For all other commands: sends an ACK to Telegram instantly, then dispatches
+  `telegram-bot.yml` via `workflow_dispatch` with `{command, args, chat_id}` inputs
+- Security: silently ignores any chat_id that doesn't match `TELEGRAM_CHAT_ID`
+
+**`telegram-bot.yml` — `process-command` job**
+- Triggered by the CF Worker via `workflow_dispatch`
+- Executes the command and sends the result back to Telegram directly
+- Runs in ~30–60 seconds (GitHub Actions runner startup)
+- Also retains a `*/30 * * * *` fallback cron for resilience
+
+### Available commands
+
+| Command | What it does | Latency |
+|---------|-------------|---------|
+| `/help` | Shows command list | <1 sec (CF Worker) |
+| `/status` | Reads latest `health_summary.json` artifact | ~45 sec |
+| `/triage` | Triggers `tier2-triage.yml` | ACK <1 sec, result ~2 min |
+| `/test` | Triggers `tier1-tests.yml` | ACK <1 sec, result ~10 min |
+| `/orchestrate` | Triggers `orchestrator.yml` | ACK <1 sec, result ~5 min |
+| `/work` | Reads latest `orchestrator.json`, dispatches tier4 for top P0/P1 brief | ACK <1 sec |
+| `/approve repo/PR` | Merges an autofix PR via `gh pr merge --squash` | ~45 sec |
+| `/reject repo/PR` | Closes an autofix PR with a comment | ~45 sec |
+| `/errors` | Shows last 3 failed workflow runs with log links | ~45 sec |
+
+### Proactive notifications (push, not pull)
+
+The agent team pushes to Telegram without being asked:
+- **tier1-tests**: alert on any test failure (fires at end of daily test run)
+- **tier4-autofix**: alert when a fix PR is created or when fix needs human
+- **orchestrator**: health summary after each synthesis run
+
+### CF Worker secrets (set in Cloudflare dashboard, not GitHub)
+
+| Secret | Purpose |
+|--------|---------|
+| `TELEGRAM_BOT_TOKEN` | Bot token from @BotFather |
+| `TELEGRAM_CHAT_ID` | Authorized chat ID — all other chats silently ignored |
+| `GITHUB_TOKEN` | PAT with `repo` + `workflow` scope (same value as `ECOSYSTEM_PAT`) |
+| `GITHUB_REPO` (plain var) | `pon00050/forensic-accounting-toolkit` |
+
+---
+
 ## Tier 4 — Fix Worker (Sonnet, event-driven)
 
 Triggered by `repository_dispatch: agent-fix` from tier1-tests or the

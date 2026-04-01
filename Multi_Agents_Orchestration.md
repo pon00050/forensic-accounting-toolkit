@@ -642,26 +642,30 @@ Before designing or extending any multi-agent system, verify:
 
 ## Deployment Notes — Known Limitations
 
-### GitHub Actions Cron Latency (observed April 2026)
+### GitHub Actions Cron Latency (resolved April 2026)
 
-GitHub Actions scheduled workflows (`on: schedule`) are **not real-time**. On busy days,
-a workflow scheduled for 00:00 UTC may not start for 60–90 minutes. This affects:
+GitHub Actions scheduled workflows (`on: schedule`) are **not real-time**. Observed
+average gap on shared runners: **48 minutes** despite a `*/5` schedule. On busy days,
+delays of 60–90 minutes are common.
 
-- `telegram-bot.yml` (5-minute cron): Telegram commands may take up to 60+ min to execute
-  during periods of high GitHub Actions load. This is not a bug in the bot — it is a
-  platform constraint.
-- `tier2-triage.yml` (daily 09:00 KST): May fire at 09:30–10:30 KST instead.
-- `orchestrator.yml` (Mon + Thu 15:00 KST): First run of the week may be delayed.
+This affected `telegram-bot.yml`: commands sent from the phone could take up to
+60+ minutes to receive any response — unacceptable for a real-time control interface.
 
-**Mitigation:** The Telegram bot supports `workflow_dispatch`, so all commands have an
-immediate manual fallback via `gh workflow run <workflow>.yml`. The `/triage`, `/test`,
-`/work`, and `/orchestrate` Telegram commands trigger `workflow_dispatch` (not cron),
-so they bypass the scheduling queue and execute within seconds of the API call.
+**Resolution:** The polling cron was replaced with a **Telegram webhook** backed by a
+Cloudflare Worker (`cloudflare-worker/bot.js`). Telegram pushes messages to the Worker
+the moment they are sent. The Worker handles `/help` directly (<1 sec) and dispatches
+`telegram-bot.yml` via `workflow_dispatch` for all other commands. ACK is sent
+immediately; result arrives when the GitHub Actions runner completes (~30–60 sec).
+
+The cron in `telegram-bot.yml` is retained at `*/30` as a resilience fallback only.
+
+Remaining cron-based workflows (`tier2-triage.yml`, `orchestrator.yml`) are unattended
+background tasks where 30–60 min scheduling jitter is acceptable. They are not on the
+critical path for real-time human interaction.
 
 > **Design principle:** Never design agent-to-user SLAs around GitHub Actions cron.
-> Cron is for unattended daily runs; manual dispatch is for time-sensitive operations.
-> The Telegram command bot exists precisely to give real-time control independent of
-> the scheduling queue.
+> Cron is for unattended background runs. Real-time human interaction requires a
+> persistent webhook receiver outside of GitHub Actions.
 
 ### Telegram Bot Update_ID Bootstrap
 
