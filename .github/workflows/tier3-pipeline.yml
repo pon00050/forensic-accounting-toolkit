@@ -61,23 +61,29 @@ jobs:
       - name: Symlink repos
         run: bash scripts/ci/checkout-ecosystem.sh
 
-      - uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-
-      - name: Install dependencies
-        working-directory: _deps/krff-shell
-        run: |
-          uv sync > /dev/null || echo "::warning::uv sync failed for krff-shell"
-          uv pip install -e . --quiet 2>/dev/null || true
-
-      - name: Set up Python + claude
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install claude-agent-sdk and data deps
-        run: pip install claude-agent-sdk pandas pyarrow
+      - name: Install pipeline dependencies
+        run: |
+          # krff-shell has 25+ heavy deps (kaleido, marimo, fastmcp, boto3...) that
+          # can't install in a clean CI container. Run kr-dart-pipeline directly —
+          # it's the actual ETL engine; krff-shell is only the delivery shell.
+          #
+          # Install sibling packages as editable first so pip doesn't resolve them
+          # from PyPI (they may be unpublished or outdated there).
+          for pkg in kr-forensic-core kr-trading-calendar kr-company-registry kr-dart-pipeline; do
+            rpath="$GITHUB_WORKSPACE/_deps/$pkg"
+            if [ -d "$rpath" ]; then
+              pip install -e "$rpath" --quiet 2>&1 | tail -2 || \
+                echo "::warning::pip install -e failed for $pkg"
+            fi
+          done
+          # Runtime deps not covered by the editable installs above
+          pip install opendartreader pykrx requests lxml tqdm python-dotenv \
+            "typer>=0.9.0" pandas pyarrow claude-agent-sdk --quiet 2>&1 | tail -3
 
       - name: Run pipeline agent
         env:
@@ -97,34 +103,37 @@ jobs:
           static_context = load_context()
 
           PIPELINE_PROMPT = f"""
-          You are a pipeline execution agent running in the krff-shell repo.
+          You are a pipeline execution agent. Your job is to run the kr-dart-pipeline
+          ETL extractors and produce parquet outputs for downstream analysis.
 
           Working context:
-          - krff-shell path: {parent}/krff-shell
           - kr-dart-pipeline path: {parent}/kr-dart-pipeline
-          - Hub path: {workspace}
+          - Output directory: {parent}/krff-shell/01_Data/processed/  (create if missing)
+          - Hub scratchpad: {workspace}/_scratchpad/
+          - DART_API_KEY is set in the environment
 
-          IMPORTANT: pykrx is geo-blocked on cloud IPs. Use --sample mode or
-          FinanceDataReader as the price data source.
+          IMPORTANT: pykrx is geo-blocked on cloud IPs. Any extractor that calls
+          pykrx will fail — skip it and note the error. Use only DART/REST-based
+          extractors that don't require pykrx.
 
           Steps to execute:
-          1. Read {parent}/krff-shell/CLAUDE.md for current conventions and pipeline entry points
-          2. Check data freshness: list .parquet files in {parent}/krff-shell/01_Data/processed/
-          3. Run pipeline in sample mode (safe for CI):
-             cd {parent}/krff-shell && uv run python cli.py run --sample 20 2>/dev/null || \\
-             uv run python cli.py run --stage dart 2>/dev/null || \\
-             echo "CLI unavailable — check CLAUDE.md for current pipeline invocation"
-          4. Validate: for each .parquet in 01_Data/processed/, confirm rows > 0
-          5. Report JSON to _scratchpad/pipeline.json:
-             {{"status":"ok|error","stages_completed":[],"parquet_counts":{{}},"errors":[]}}
+          1. Read {parent}/kr-dart-pipeline/CLAUDE.md — understand available extractors
+             and how to invoke the CLI.
+          2. Create output dir: mkdir -p {parent}/krff-shell/01_Data/processed/
+          3. Run the pipeline CLI in sample/test mode to produce parquets:
+               cd {parent}/kr-dart-pipeline && python -m kr_dart_pipeline.cli --help
+             Then run whatever sample/test command the CLI exposes. Target: at least
+             one parquet file in the output dir with rows > 0.
+          4. Validate: for each .parquet produced, confirm rows > 0 with pandas.
+          5. Write to {workspace}/_scratchpad/pipeline.json:
+             {{"status":"ok|partial|error","stages_completed":[],"parquet_counts":{{}},"errors":[]}}
 
           Rules:
-          - If any stage fails, continue to validation and include error in report.
-          - Do NOT push to git.
-          - Do NOT modify source files.
-          - Use 'uv run' for all Python commands.
-          - If pipeline architecture has changed (CLAUDE.md differs from this prompt),
-            follow CLAUDE.md — it is authoritative.
+          - Do NOT push to git. Do NOT modify source files.
+          - If pykrx-dependent stages fail, skip them and continue with DART-only stages.
+          - Follow CLAUDE.md — it is authoritative over this prompt.
+          - If the CLI is not yet functional, run one extractor module directly:
+              python -m kr_dart_pipeline.extractors.<name> --sample 20
           """
 
           async def main():
@@ -136,7 +145,7 @@ jobs:
                   max_turns=40,
                   max_budget_usd=5.00,
                   model="claude-sonnet-4-6",
-                  cwd=f"{parent}/krff-shell",
+                  cwd=f"{parent}/kr-dart-pipeline",
               )
               await run_agent(PIPELINE_PROMPT, options,
                               escalation_context="Pipeline execution failed on GitHub Actions runner")

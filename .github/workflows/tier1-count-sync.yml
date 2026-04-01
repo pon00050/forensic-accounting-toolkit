@@ -51,9 +51,10 @@ jobs:
             rpath="$PARENT/$repo"
             if [ -d "$rpath" ] && [ -f "$rpath/pyproject.toml" ]; then
               cd "$rpath"
-              # --quiet suppresses progress bars; surface real errors as
-              # workflow warnings so we know exactly why collection fails.
-              uv sync --quiet || echo "::warning::uv sync failed for $repo — test collection will return 0 for this repo"
+              # --all-extras ensures dev/test deps (pytest, etc.) are installed.
+              # Surface errors as workflow warnings so we can diagnose collection failures.
+              uv sync --all-extras --quiet || \
+                echo "::warning::uv sync failed for $repo — test collection will return 0 for this repo"
               cd "$GITHUB_WORKSPACE"
             fi
           done
