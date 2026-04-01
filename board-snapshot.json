@@ -1,5 +1,5 @@
 {
-  "exported_at": "2026-04-01T10:53:29",
+  "exported_at": "2026-04-01T17:27:09",
   "source": "gh project item-list 1 --owner pon00050",
   "items": [
     {
@@ -124,58 +124,6 @@
       "priority": "P0",
       "status": "Done",
       "title": "Add CLAUDE.md to kr-trading-calendar"
-    },
-    {
-      "content": {
-        "body": "",
-        "id": "DI_lAHOAH3il84BRykIzgKRNUc",
-        "title": "Send 4 LinkedIn InMails (Timefolio, Billionfold, VIP, Kabouter)",
-        "type": "DraftIssue"
-      },
-      "id": "PVTI_lAHOAH3il84BRykIzgneIgQ",
-      "owner": "Human",
-      "priority": "P0",
-      "status": "Todo",
-      "title": "Send 4 LinkedIn InMails (Timefolio, Billionfold, VIP, Kabouter)"
-    },
-    {
-      "content": {
-        "body": "",
-        "id": "DI_lAHOAH3il84BRykIzgKRNUg",
-        "title": "Apply to EY Forensic / Deloitte with GitHub portfolio",
-        "type": "DraftIssue"
-      },
-      "id": "PVTI_lAHOAH3il84BRykIzgneIgY",
-      "owner": "Human",
-      "priority": "P0",
-      "status": "Todo",
-      "title": "Apply to EY Forensic / Deloitte with GitHub portfolio"
-    },
-    {
-      "content": {
-        "body": "",
-        "id": "DI_lAHOAH3il84BRykIzgKRNUk",
-        "title": "Call G1 \u00ec\u00a3\u00bc\u00ea\u00b4\u20ac\u00ea\u00b8\u00b0\u00ea\u00b4\u20ac SNU \u00ec\u2039\u0153\u00ed\udc9d\u00a5 \u00e2\u20ac\u201d grant deadline Mar 24",
-        "type": "DraftIssue"
-      },
-      "id": "PVTI_lAHOAH3il84BRykIzgneIgg",
-      "owner": "Human",
-      "priority": "P0",
-      "status": "Todo",
-      "title": "Call G1 \u00ec\u00a3\u00bc\u00ea\u00b4\u20ac\u00ea\u00b8\u00b0\u00ea\u00b4\u20ac SNU \u00ec\u2039\u0153\u00ed\udc9d\u00a5 \u00e2\u20ac\u201d grant deadline Mar 24"
-    },
-    {
-      "content": {
-        "body": "",
-        "id": "DI_lAHOAH3il84BRykIzgKRNUo",
-        "title": "SEIBRO API: call KSD 051-519-1420 for approval (XB-002)",
-        "type": "DraftIssue"
-      },
-      "id": "PVTI_lAHOAH3il84BRykIzgneIgo",
-      "owner": "Human",
-      "priority": "P2",
-      "status": "Todo",
-      "title": "SEIBRO API: call KSD 051-519-1420 for approval (XB-002)"
     },
     {
       "content": {
