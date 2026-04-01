@@ -137,7 +137,7 @@ Commands:
 /clear — reset conversation history
 /help — this message
 
-_Any other message: I respond directly as your team leader._`;
+_Any other message: I respond as your team leader (Sonnet). Prefix with !! for deep strategic analysis (Opus)._`;
 
 // ── Telegram helpers ──────────────────────────────────────────────────────────
 
@@ -271,6 +271,11 @@ async function fetchLiveContext(env) {
 async function chatWithLeader(env, chat_id, userMessage) {
   const key = `chat:${chat_id}`;
 
+  // !! prefix → Opus (deep strategic analysis); default → Sonnet (5× cheaper)
+  const useOpus = userMessage.startsWith("!!");
+  const model = useOpus ? "claude-opus-4-6" : "claude-sonnet-4-6";
+  const cleanMessage = useOpus ? userMessage.slice(2).trimStart() : userMessage;
+
   // Load conversation history, live context, and memories in parallel
   const [storedHistory, liveContext, memoriesObj] = await Promise.all([
     env.CHAT_STORE.get(key).catch(() => null),
@@ -285,21 +290,32 @@ async function chatWithLeader(env, chat_id, userMessage) {
     history = [];
   }
 
-  history.push({ role: "user", content: userMessage });
+  history.push({ role: "user", content: cleanMessage });
   if (history.length > 20) history = history.slice(-20);
 
-  // Build three-tier system prompt
+  // Build three-tier system prompt as content blocks for prompt caching.
+  // cache_control on the static block saves ~67% on system prompt tokens for
+  // any second message within a 5-minute window.
   const memoriesText = memoriesObj.memories.length > 0
     ? memoriesObj.memories
         .map((m) => `- [${m.category}] ${m.content} (${m.created})`)
         .join("\n")
     : "(No memories saved yet)";
 
-  const fullSystem = SYSTEM_PROMPT
-    + "\n\n## CURRENT STATE (auto-synced from CI)\n"
-    + (liveContext || "(no live context synced yet — run /orchestrate to populate)")
-    + "\n\n## YOUR MEMORIES\n"
-    + memoriesText;
+  const systemBlocks = [
+    {
+      type: "text",
+      text: SYSTEM_PROMPT,
+      cache_control: { type: "ephemeral" },
+    },
+    {
+      type: "text",
+      text: "## CURRENT STATE (auto-synced from CI)\n"
+        + (liveContext || "(no live context synced yet — run /orchestrate to populate)")
+        + "\n\n## YOUR MEMORIES\n"
+        + memoriesText,
+    },
+  ];
 
   let reply;
   try {
@@ -311,13 +327,14 @@ async function chatWithLeader(env, chat_id, userMessage) {
       headers: {
         "x-api-key": env.ANTHROPIC_API_KEY,
         "anthropic-version": "2023-06-01",
+        "anthropic-beta": "prompt-caching-2024-07-31",
         "content-type": "application/json",
         "cf-aig-authorization": `Bearer ${env.CF_AIG_TOKEN}`,
       },
       body: JSON.stringify({
-        model: "claude-opus-4-6",
+        model,
         max_tokens: 2048,
-        system: fullSystem,
+        system: systemBlocks,
         messages: history,
       }),
     });
