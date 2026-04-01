@@ -156,10 +156,11 @@ jobs:
                   summary_path = Path("/tmp/orch/health_summary.json")
                   if summary_path.exists():
                       s = json.loads(summary_path.read_text())
-                      score = float(s.get("health", 0)) if str(s.get("health", "0")).replace(".", "").isdigit() else 0
+                      health_raw = str(s.get("health", "0")).split("/")[0].strip()
+                      score = float(health_raw) if health_raw.replace(".", "").isdigit() else 0
                       emoji = "✅" if score >= 8 else "⚠️" if score >= 5 else "🚨"
                       lines = [
-                          f"{emoji} *Health: {s.get('health','?')}/10*",
+                          f"{emoji} *Health: {health_raw}/10*",
                           f"P0/P1: {s.get('p0p1_count','?')} | Needs human: {s.get('needs_human_count','?')}",
                           f"Date: {s.get('date','?')}",
                       ]
@@ -402,6 +403,22 @@ jobs:
                   tg_send(chat_id, "Fetching recent failures...")
                   tg_send(chat_id, get_recent_errors())
 
+              elif cmd == "/ask":
+                  if not args:
+                      tg_send(chat_id, "Usage: `/ask <your question>`\nOr just send a message ending with ?")
+                  else:
+                      r = subprocess.run([
+                          "gh", "workflow", "run", "telegram-bot.yml",
+                          "--repo", REPO,
+                          "--field", f"command=/ask",
+                          "--field", f"args={args}",
+                          "--field", f"chat_id={chat_id}",
+                      ], capture_output=True, text=True)
+                      if r.returncode == 0:
+                          tg_send(chat_id, "Researching your question (~1 min)...")
+                      else:
+                          tg_send(chat_id, f"Dispatch failed: {r.stderr.strip()[:200]}")
+
               else:
                   tg_send(chat_id, f"Unknown: `{cmd}`\nSend /help for commands.")
 
@@ -454,7 +471,11 @@ jobs:
                   continue
 
               if not text.startswith("/"):
-                  continue  # not a command
+                  # Auto-detect: messages ending with ? are routed to /ask
+                  if text.endswith("?"):
+                      text = "/ask " + text
+                  else:
+                      continue  # not a command, not a question
 
               print(f"[cmd] {text!r}")
               route(text, chat_id)
@@ -560,10 +581,11 @@ jobs:
                   summary_path = Path("/tmp/orch/health_summary.json")
                   if summary_path.exists():
                       s = json.loads(summary_path.read_text())
-                      score = float(s.get("health", 0)) if str(s.get("health","0")).replace(".","").isdigit() else 0
+                      health_raw = str(s.get("health", "0")).split("/")[0].strip()
+                      score = float(health_raw) if health_raw.replace(".", "").isdigit() else 0
                       emoji = "✅" if score >= 8 else "⚠️" if score >= 5 else "🚨"
                       lines = [
-                          f"{emoji} *Health: {s.get('health','?')}/10*",
+                          f"{emoji} *Health: {health_raw}/10*",
                           f"P0/P1: {s.get('p0p1_count','?')} | Needs human: {s.get('needs_human_count','?')}",
                           f"Date: {s.get('date','?')}",
                       ]
@@ -749,6 +771,79 @@ jobs:
           elif CMD == "/errors":
               tg_send(get_errors())
 
+          elif CMD == "/ask":
+              pass  # Handled by ask-question job running in parallel
+
           else:
               tg_send(f"Unknown: `{CMD}`\nSend /help for commands.")
           PYEOF
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 3: ask-question
+  # Runs a Sonnet research agent against all 13 repos and sends the answer back.
+  # Triggered by /ask command or any message ending with ? (auto-routed by CF Worker).
+  # ─────────────────────────────────────────────────────────────────────────────
+  ask-question:
+    name: "Research question"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.command == '/ask'
+    timeout-minutes: 8
+    steps:
+      - name: Checkout hub
+        uses: actions/checkout@v4
+
+      - name: Validate chat_id
+        env:
+          TELEGRAM_CHAT_ID_AUTHORIZED: ${{ secrets.TELEGRAM_CHAT_ID }}
+          INPUT_CHAT_ID: ${{ github.event.inputs.chat_id }}
+        run: |
+          if [ "$INPUT_CHAT_ID" != "$TELEGRAM_CHAT_ID_AUTHORIZED" ]; then
+            echo "[security] Unauthorized chat_id — aborting"
+            exit 1
+          fi
+
+      - name: Checkout all ecosystem repos
+        run: |
+          mkdir -p _deps
+          REPOS=(kr-company-registry kr-trading-calendar kr-beneish kr-derivatives
+                 jfia-catalog jfia-forensic kr-enforcement-cases kr-forensic-core
+                 krff-shell kr-dart-pipeline kr-anomaly-scoring kr-stat-tests)
+          for repo in "${REPOS[@]}"; do
+            git clone --depth=1 "https://github.com/pon00050/$repo.git" "_deps/$repo" 2>/dev/null \
+              || echo "Warning: could not clone $repo (may be private or missing)"
+          done
+
+      - name: Pre-fetch open issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p _scratchpad
+          gh issue list --repo ${{ github.repository }} \
+            --state open --json number,title,labels --limit 30 \
+            > _scratchpad/open-issues.json 2>/dev/null || echo "[]" > _scratchpad/open-issues.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install claude-agent-sdk
+        run: pip install claude-agent-sdk
+
+      - name: Run ask agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+          ASK_QUESTION: ${{ github.event.inputs.args }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ github.event.inputs.chat_id }}
+        run: python scripts/agents/ask_agent.py
+
+      - name: Upload scratchpad
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scratchpad-ask-${{ github.run_id }}
+          path: _scratchpad/ask-result.json
+          retention-days: 7
+          if-no-files-found: ignore

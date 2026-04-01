@@ -204,6 +204,21 @@ jobs:
           print(f"Dispatched {dispatched} agent-fix event(s) from orchestrator")
           PYEOF
 
+      - name: Close previous orchestrator summary issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Close old agent:orchestrator issues so each run has exactly one open summary
+          OLD_ISSUES=$(gh issue list \
+            --label "agent:orchestrator" \
+            --state open \
+            --json number \
+            --jq '.[].number' 2>/dev/null || true)
+          for num in $OLD_ISSUES; do
+            gh issue close "$num" --comment "Superseded by new orchestrator run." 2>/dev/null || true
+            echo "Closed previous summary issue #$num"
+          done
+
       - name: Post orchestrator summary issue
         env:
           GH_TOKEN: ${{ github.token }}
@@ -311,6 +326,7 @@ jobs:
               issue_url = s.get("issue_url", "")
               date = s.get("date", "")
               # Health emoji
+              health = str(health).split("/")[0].strip()  # strip any trailing "/10" from old format
               score = float(health) if str(health).replace('.','').isdigit() else 0
               emoji = "✅" if score >= 8 else "⚠️" if score >= 5 else "🚨"
               text = (

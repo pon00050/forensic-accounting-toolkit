@@ -126,7 +126,7 @@ Your response MUST end with a JSON code block in exactly this format:
 ```json
 {
   "generated_at": "<ISO>",
-  "ecosystem_health_score": "<N>/10",
+  "ecosystem_health_score": "<N>",
   "health_narrative": "<2-3 sentences synthesizing the state>",
   "action_briefs": [
     {
@@ -160,6 +160,26 @@ No prose after the JSON block.
 
 # Cap per scratchpad file to stay within token budget
 _FILE_CHAR_LIMIT = 8000
+
+
+def _load_suppress_list() -> str:
+    """Load orchestrator_suppress.json and format as a system prompt section."""
+    suppress_path = Path(__file__).parent / "orchestrator_suppress.json"
+    if not suppress_path.exists():
+        return ""
+    try:
+        data = json.loads(suppress_path.read_text(encoding="utf-8"))
+        items = data.get("suppress", [])
+        if not items:
+            return ""
+        lines = ["## DO NOT RECOMMEND — Suppressed Items\n",
+                 "The following are deliberately deferred by the project owner.",
+                 "Do NOT include them in action_briefs. Do NOT create issues for them.\n"]
+        for item in items:
+            lines.append(f"- repo={item['repo']!r}, keyword={item['keyword']!r}: {item['reason']}")
+        return "\n".join(lines) + "\n"
+    except Exception:
+        return ""
 
 
 async def main() -> None:
@@ -198,10 +218,12 @@ async def main() -> None:
     pre_injected_block = "\n\n".join(injected_sections)
     prompt = TASK_PROMPT_HEADER + "\n\n---\n\n" + pre_injected_block
 
+    suppress_section = _load_suppress_list()
+
     from claude_agent_sdk import ClaudeAgentOptions  # type: ignore
 
     options = ClaudeAgentOptions(
-        system_prompt=static_context + ORCHESTRATOR_SYSTEM_SUFFIX,
+        system_prompt=static_context + ORCHESTRATOR_SYSTEM_SUFFIX + suppress_section,
         allowed_tools=[],   # MM#3: coordinator ZERO tools — synthesize pre-injected data only
         permission_mode="bypassPermissions",
         max_turns=POLICY["max_turns"],
@@ -264,36 +286,79 @@ async def main() -> None:
         )
         print("[ESCALATION] escalation.md written — human review required", file=sys.stderr)
 
+    # Python-side suppress filter (safety net — agent may still include suppressed items)
+    suppress_path = Path(__file__).parent / "orchestrator_suppress.json"
+    if suppress_path.exists():
+        try:
+            suppress_data = json.loads(suppress_path.read_text(encoding="utf-8"))
+            suppress_rules = suppress_data.get("suppress", [])
+            original_count = len(result.get("action_briefs", []))
+            result["action_briefs"] = [
+                b for b in result.get("action_briefs", [])
+                if not any(
+                    b.get("repo") == rule["repo"] and rule["keyword"].lower() in
+                    (b.get("change", "") + b.get("why", "") + b.get("category", "")).lower()
+                    for rule in suppress_rules
+                )
+            ]
+            filtered = original_count - len(result["action_briefs"])
+            if filtered:
+                print(f"[suppress] Filtered {filtered} suppressed item(s)", file=sys.stderr)
+        except Exception:
+            pass
+
     briefs = result.get("action_briefs", [])
     print(f"\n[orchestrator] Health: {result.get('ecosystem_health_score', '?')} | "
           f"{len(briefs)} action briefs", file=sys.stderr)
+
+    # Load pre-fetched open issues for dedup
+    open_issues: list = []
+    open_issues_path = scratchpad / "open-issues.json"
+    if open_issues_path.exists():
+        try:
+            open_issues = json.loads(open_issues_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
 
     # Create GitHub issues for actionable briefs.
     # _create_issues() mutates each brief in-place with issue_number so the
     # dispatch step in orchestrator.yml can include it in the Tier 4 payload
     # and Tier 4 can close the originating issue after auto-merge.
-    _create_issues(briefs, workspace)
+    _create_issues(briefs, workspace, open_issues)
 
     # Re-write orchestrator.json now that briefs have issue_number populated.
     write_scratchpad("orchestrator.json", result)
 
 
-def _create_issues(briefs: list, workspace: str) -> None:
+def _create_issues(briefs: list, workspace: str, open_issues: list) -> None:
     """Create GitHub issues for each actionable brief (Principle #8)."""
     p0_p1 = [b for b in briefs if b.get("priority") in ("P0", "P1")]
     other = [b for b in briefs if b.get("priority") in ("P2", "P3")]
 
     for brief in p0_p1:
-        _create_issue(brief)
+        _create_issue(brief, open_issues)
 
     if other:
-        _create_batched_issue(other)
+        _create_batched_issue(other, open_issues)
 
 
-def _create_issue(brief: dict) -> None:
+def _create_issue(brief: dict, open_issues: list) -> None:
     repo = brief.get("repo", "unknown")
     priority = brief.get("priority", "P3")
     category = brief.get("category", "GENERAL")
+
+    # Dedup: skip if an open issue already exists for this repo + category
+    for oi in open_issues:
+        oi_title = oi.get("title", "")
+        oi_labels = [
+            (l.get("name", "") if isinstance(l, dict) else str(l))
+            for l in oi.get("labels", [])
+        ]
+        if (repo in oi_title and category in oi_title and "agent-task" in oi_labels):
+            existing_num = oi.get("number")
+            print(f"[issue] Skipping {repo}/{category} — already open as #{existing_num}", file=sys.stderr)
+            brief["issue_number"] = existing_num
+            return
     change = brief.get("change", "See brief.")
     why = brief.get("why", "")
     command = brief.get("command")
@@ -349,9 +414,20 @@ def _create_issue(brief: dict) -> None:
         print(f"[issue] Skipped ({result.stderr.strip()[:100]})", file=sys.stderr)
 
 
-def _create_batched_issue(briefs: list) -> None:
+def _create_batched_issue(briefs: list, open_issues: list) -> None:
     if not briefs:
         return
+
+    # Dedup: skip if an open P2/P3 batched issue already exists from this run cycle
+    for oi in open_issues:
+        oi_title = oi.get("title", "")
+        oi_labels = [
+            (l.get("name", "") if isinstance(l, dict) else str(l))
+            for l in oi.get("labels", [])
+        ]
+        if ("Batched" in oi_title or "P2/P3" in oi_title) and "agent-task" in oi_labels:
+            print(f"[issue] Skipping batched P2/P3 — already open as #{oi.get('number')}", file=sys.stderr)
+            return
 
     items = "\n".join(
         f"- [{b.get('priority','?')}] `{b.get('repo','?')}`: {b.get('change','')[:100]}"

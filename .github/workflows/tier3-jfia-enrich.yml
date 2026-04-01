@@ -12,8 +12,6 @@ name: "Tier 3 — jfia-catalog Enrichment (PDF → Sonnet)"
 # 333 missing fields × $0.002 ≈ $0.67 per full run. Hard cap: $3.00.
 
 on:
-  schedule:
-    - cron: "0 2 1 * *"   # 1st of each month, 11:00 KST
   workflow_dispatch:
     inputs:
       max_articles:

@@ -1,0 +1,24 @@
+{
+  "suppress": [
+    {
+      "repo": "kr-beneish",
+      "keyword": "PyPI",
+      "reason": "User deliberately deferred PyPI publication — do not recommend until explicitly unblocked."
+    },
+    {
+      "repo": "kr-dart-pipeline",
+      "keyword": "SEIBRO",
+      "reason": "SEIBRO API integration deferred until end of April 2026 — KSD is still revising the public API."
+    },
+    {
+      "repo": "kr-dart-pipeline",
+      "keyword": "pykrx",
+      "reason": "User wants to research the rationale for pykrx before deciding to switch. Do not recommend replacing pykrx until explicitly unblocked."
+    },
+    {
+      "repo": "kr-dart-pipeline",
+      "keyword": "FinanceDataReader",
+      "reason": "Linked to the pykrx switch decision — suppressed until pykrx replacement decision is made."
+    }
+  ]
+}

@@ -29,7 +29,10 @@ Commands:
 /approve <repo/PR> — merge an autofix PR
 /reject <repo/PR> — close an autofix PR
 /errors — show recent workflow failures
-/help — this message`;
+/ask <question> — research a codebase question (~1 min)
+/help — this message
+
+_Tip: messages ending with ? are auto-routed to /ask_`;
 
 // ── Telegram helpers ──────────────────────────────────────────────────────────
 
@@ -95,13 +98,21 @@ export default {
     if (chat_id !== String(env.TELEGRAM_CHAT_ID)) {
       return new Response("ok"); // silently ignore
     }
-    if (!text.startsWith("/")) {
-      return new Response("ok"); // not a command
-    }
 
-    const parts = text.split(/\s+/);
-    const cmd = parts[0].split("@")[0].toLowerCase(); // strip bot mention
-    const args = parts.slice(1).join(" ");
+    let cmd, args;
+    if (!text.startsWith("/")) {
+      // Auto-detect: messages ending with ? are routed to /ask
+      if (text.endsWith("?")) {
+        cmd = "/ask";
+        args = text;
+      } else {
+        return new Response("ok"); // not a command, not a question
+      }
+    } else {
+      const parts = text.split(/\s+/);
+      cmd = parts[0].split("@")[0].toLowerCase(); // strip bot mention
+      args = parts.slice(1).join(" ");
+    }
 
     // ── /help: handled directly — no GitHub Actions needed ───────────────────
     if (cmd === "/help" || cmd === "/start") {
@@ -119,6 +130,7 @@ export default {
       "/orchestrate":"Orchestrator started. Full report in ~5 min.",
       "/work":       "Looking for top AI task...",
       "/errors":     "Fetching recent failures...",
+      "/ask":        "Researching your question (~1 min)...",
     };
 
     const ack = ACK[cmd] ?? `Processing \`${cmd}\`...`;
