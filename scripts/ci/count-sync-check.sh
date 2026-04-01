@@ -71,12 +71,11 @@ for repo in "${!TEST_RUNNERS[@]}"; do
     if [ -z "$actual" ]; then
         actual=$(echo "$count_output" | grep -c '<Function ' || echo "0")
     fi
-    echo "  [count-sync] $repo: runner=$effective_runner actual=$actual"
     if [ -z "$actual" ] || [ "$actual" = "0" ]; then
         # Treat as collection failure, not a genuine zero-test count.
-        # Log all output so we can diagnose import errors.
-        echo "  [count-sync] COLLECTION FAILED for $repo — output:"
-        echo "$count_output" | head -10 | sed 's/^/    /'
+        # Log the FIRST lines (where ImportError appears) so we can diagnose.
+        echo "  [count-sync] COLLECTION FAILED for $repo — first error lines:"
+        echo "$count_output" | grep -E "Error|error|FAILED|import" | head -4 | sed 's/^/    /'
         COLLECTION_FAILED[$repo]=1
         actual=0
     fi
