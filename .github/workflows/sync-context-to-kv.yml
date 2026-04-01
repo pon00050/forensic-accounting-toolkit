@@ -1,0 +1,193 @@
+name: "Sync Live Context to GitHub Variable"
+
+# Fires automatically after CI workflows complete, so the team leader agent
+# always has fresh ecosystem state injected into its system prompt.
+#
+# Writes a ~500-token context summary to the GitHub Actions variable LIVE_CONTEXT.
+# The CF Worker bot reads this via the GitHub API before each Opus call.
+
+on:
+  workflow_run:
+    workflows:
+      - "Orchestrator — Synthesizer + Dispatcher"
+      - "Tier 1 — Tests"
+      - "Tier 2 — Triage"
+    types:
+      - completed
+  workflow_dispatch:   # manual trigger: /orchestrate, /triage, /test completions
+
+permissions:
+  actions: write      # required for gh variable set
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout hub
+        uses: actions/checkout@v4
+
+      - name: Download orchestrator artifact (if available)
+        env:
+          GH_TOKEN: ${{ secrets.ECOSYSTEM_PAT }}
+        run: |
+          mkdir -p /tmp/orch /tmp/triage /tmp/tests
+
+          # orchestrator scratchpad
+          ARTIFACT_ID=$(gh api \
+            "repos/${{ github.repository }}/actions/artifacts?name=scratchpad-orchestrator&per_page=1" \
+            --jq ".artifacts[0].id // empty" 2>/dev/null || echo "")
+          if [ -n "$ARTIFACT_ID" ]; then
+            gh api "repos/${{ github.repository }}/actions/artifacts/${ARTIFACT_ID}/zip" \
+              --header "Accept: application/vnd.github.v3+json" \
+              > /tmp/orch.zip 2>/dev/null && \
+              unzip -o /tmp/orch.zip -d /tmp/orch/ >/dev/null 2>&1 || true
+          fi
+
+          # triage scratchpad
+          TRIAGE_ID=$(gh api \
+            "repos/${{ github.repository }}/actions/artifacts?name=scratchpad-triage&per_page=1" \
+            --jq ".artifacts[0].id // empty" 2>/dev/null || echo "")
+          if [ -n "$TRIAGE_ID" ]; then
+            gh api "repos/${{ github.repository }}/actions/artifacts/${TRIAGE_ID}/zip" \
+              --header "Accept: application/vnd.github.v3+json" \
+              > /tmp/triage.zip 2>/dev/null && \
+              unzip -o /tmp/triage.zip -d /tmp/triage/ >/dev/null 2>&1 || true
+          fi
+
+          # tier1 test results
+          TEST_ID=$(gh api \
+            "repos/${{ github.repository }}/actions/artifacts?name=scratchpad-tier1-tests&per_page=1" \
+            --jq ".artifacts[0].id // empty" 2>/dev/null || echo "")
+          if [ -n "$TEST_ID" ]; then
+            gh api "repos/${{ github.repository }}/actions/artifacts/${TEST_ID}/zip" \
+              --header "Accept: application/vnd.github.v3+json" \
+              > /tmp/tests.zip 2>/dev/null && \
+              unzip -o /tmp/tests.zip -d /tmp/tests/ >/dev/null 2>&1 || true
+          fi
+
+      - name: Fetch open issues
+        env:
+          GH_TOKEN: ${{ secrets.ECOSYSTEM_PAT }}
+        run: |
+          gh issue list --repo ${{ github.repository }} \
+            --state open --json number,title,labels --limit 20 \
+            > /tmp/open-issues.json 2>/dev/null || echo "[]" > /tmp/open-issues.json
+
+      - name: Build and upload context summary
+        env:
+          GH_TOKEN: ${{ secrets.ECOSYSTEM_PAT }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, os, subprocess
+          from pathlib import Path
+          from datetime import datetime, timezone
+
+          REPO = os.environ["GITHUB_REPOSITORY"]
+          now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+          lines = [f"Synced: {now}"]
+
+          # ── Health / orchestrator ────────────────────────────────────────────
+          health_path = Path("/tmp/orch/health_summary.json")
+          orch_path   = Path("/tmp/orch/orchestrator.json")
+          if health_path.exists():
+              try:
+                  s = json.loads(health_path.read_text())
+                  health_raw = str(s.get("health", "?")).split("/")[0].strip()
+                  p0p1 = s.get("p0p1_count", "?")
+                  needs_human = s.get("needs_human_count", "?")
+                  date = s.get("date", "?")
+                  lines.append(f"HEALTH: {health_raw}/10 (as of {date})")
+                  lines.append(f"BOARD: P0/P1={p0p1} | Needs human={needs_human}")
+              except Exception:
+                  pass
+          elif orch_path.exists():
+              try:
+                  d = json.loads(orch_path.read_text())
+                  score = d.get("ecosystem_health_score", "?")
+                  p0p1 = len([b for b in d.get("action_briefs", [])
+                               if b.get("priority") in ("P0","P1")])
+                  lines.append(f"HEALTH: {score}/10")
+                  lines.append(f"BOARD: P0/P1={p0p1}")
+              except Exception:
+                  pass
+
+          # ── Test results ─────────────────────────────────────────────────────
+          for fname in ["/tmp/tests/test-results.json", "/tmp/tests/tier1-tests.json"]:
+              p = Path(fname)
+              if p.exists():
+                  try:
+                      t = json.loads(p.read_text())
+                      passed = t.get("passed", "?")
+                      total  = t.get("total", "?")
+                      failed_repos = t.get("failed_repos", [])
+                      lines.append(f"TESTS: {passed}/{total} passing")
+                      if failed_repos:
+                          lines.append(f"FAILING: {', '.join(failed_repos[:5])}")
+                  except Exception:
+                      pass
+                  break
+
+          # ── Triage ───────────────────────────────────────────────────────────
+          for fname in ["/tmp/triage/triage.json", "/tmp/triage/triage-last.json"]:
+              p = Path(fname)
+              if p.exists():
+                  try:
+                      t = json.loads(p.read_text())
+                      top = t.get("top_recommendations", t.get("signals", []))
+                      if top:
+                          rec = top[0]
+                          if isinstance(rec, dict):
+                              lines.append(f"TRIAGE: {rec.get('description', rec.get('signal', ''))[:100]}")
+                          else:
+                              lines.append(f"TRIAGE: {str(rec)[:100]}")
+                  except Exception:
+                      pass
+                  break
+
+          # ── Open issues ──────────────────────────────────────────────────────
+          try:
+              issues = json.loads(Path("/tmp/open-issues.json").read_text())
+              if issues:
+                  issue_strs = []
+                  for iss in issues[:5]:
+                      labels = [l["name"] for l in iss.get("labels", [])]
+                      priority = next((l for l in labels if l.startswith("P")), "")
+                      issue_strs.append(f"#{iss['number']} {iss['title'][:50]}{' ['+priority+']' if priority else ''}")
+                  lines.append(f"OPEN ISSUES: {'; '.join(issue_strs)}")
+          except Exception:
+              pass
+
+          # ── board-snapshot fallback ──────────────────────────────────────────
+          board_path = Path("board-snapshot.json")
+          if board_path.exists():
+              try:
+                  snap = json.loads(board_path.read_text())
+                  items = snap.get("items", [])
+                  open_items = [i for i in items if i.get("status") not in ("Done","Closed","")]
+                  ai_items = [i for i in open_items if i.get("owner") == "AI"]
+                  if open_items:
+                      lines.append(f"BOARD_SNAPSHOT: {len(open_items)} open ({len(ai_items)} AI-owned) [from committed snapshot]")
+              except Exception:
+                  pass
+
+          context = "\n".join(lines)
+          print("Context summary:")
+          print(context)
+          print(f"\nLength: {len(context)} chars")
+
+          # Write to GitHub Actions variable LIVE_CONTEXT
+          r = subprocess.run(
+              ["gh", "variable", "set", "LIVE_CONTEXT",
+               "--body", context,
+               "--repo", REPO],
+              capture_output=True, text=True,
+          )
+          if r.returncode == 0:
+              print("✅ LIVE_CONTEXT variable updated.")
+          else:
+              print(f"❌ Failed to set variable: {r.stderr.strip()}")
+              raise SystemExit(1)
+          PYEOF

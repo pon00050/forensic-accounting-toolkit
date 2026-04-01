@@ -211,11 +211,9 @@ jobs:
 
                   data = json.loads(orch_path.read_text())
                   briefs = data.get("action_briefs", [])
-                  dispatchable = {"CONVENTION_DRIFT", "STUB", "DOC_DRIFT", "COUNT_DRIFT", "TEST_FAIL"}
                   for brief in briefs:
                       if (not brief.get("ai_actionable") or
-                              brief.get("priority") not in ("P0", "P1") or
-                              brief.get("category") not in dispatchable):
+                              brief.get("priority") not in ("P0", "P1")):
                           continue
                       repo_name = brief.get("repo", "")
                       if not repo_name:
@@ -471,11 +469,7 @@ jobs:
                   continue
 
               if not text.startswith("/"):
-                  # Auto-detect: messages ending with ? are routed to /ask
-                  if text.endswith("?"):
-                      text = "/ask " + text
-                  else:
-                      continue  # not a command, not a question
+                  continue  # non-commands handled by CF Worker team leader
 
               print(f"[cmd] {text!r}")
               route(text, chat_id)
@@ -624,11 +618,9 @@ jobs:
                       return False
 
                   data = json.loads(orch_path.read_text())
-                  dispatchable = {"CONVENTION_DRIFT", "STUB", "DOC_DRIFT", "COUNT_DRIFT", "TEST_FAIL"}
                   for brief in data.get("action_briefs", []):
                       if (not brief.get("ai_actionable") or
-                              brief.get("priority") not in ("P0", "P1") or
-                              brief.get("category") not in dispatchable):
+                              brief.get("priority") not in ("P0", "P1")):
                           continue
                       repo_name = brief.get("repo", "")
                       if not repo_name:
@@ -715,32 +707,111 @@ jobs:
                   else:
                       tg_send(f"Close failed: {r.stderr.strip()[:200]}")
 
-          # ── /errors ───────────────────────────────────────────────────────────
+          # ── /errors ─────────────────────────────────────────────────────
+
+          ALL_REPOS = [
+              "forensic-accounting-toolkit",
+              "kr-company-registry", "kr-trading-calendar", "kr-beneish",
+              "jfia-catalog", "kr-derivatives", "jfia-forensic",
+              "kr-enforcement-cases", "kr-forensic-core", "kr-dart-pipeline",
+              "kr-anomaly-scoring", "kr-stat-tests", "krff-shell",
+          ]
 
           def get_errors():
+              all_failed = []
+              for repo_name in ALL_REPOS:
+                  try:
+                      r = subprocess.run([
+                          "gh", "run", "list", "--repo", f"pon00050/{repo_name}",
+                          "--json", "name,conclusion,url,createdAt",
+                          "--limit", "5",
+                      ], capture_output=True, text=True)
+                      if r.returncode != 0:
+                          continue
+                      runs = json.loads(r.stdout)
+                      for run in runs:
+                          if run.get("conclusion") == "failure":
+                              run["_repo"] = repo_name
+                              all_failed.append(run)
+                  except Exception:
+                      continue
+              if not all_failed:
+                  return "✅ No recent workflow failures across all 13 repos."
+              all_failed.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
+              top3 = all_failed[:3]
+              lines = [f"*Recent failures ({len(all_failed)} total across 13 repos):*"]
+              for f in top3:
+                  repo = f.get("_repo", "?")
+                  name = f.get("name", "?")[:40]
+                  date = f.get("createdAt", "")[:10]
+                  url = f.get("url", "")
+                  lines.append(f"• `{repo}`: {name} ({date})\n  [Logs]({url})")
+              return "\n".join(lines)
+
+          # ── /board ─────────────────────────────────────────────────────
+
+          def get_board():
               try:
                   r = subprocess.run([
-                      "gh", "run", "list", "--repo", REPO,
-                      "--json", "name,conclusion,url,createdAt",
-                      "--limit", "20",
-                  ], capture_output=True, text=True)
+                      "gh", "project", "item-list", "1",
+                      "--owner", "pon00050",
+                      "--format", "json",
+                      "--limit", "50",
+                  ], capture_output=True, text=True, timeout=30)
                   if r.returncode != 0:
-                      return "Could not fetch workflow runs."
-                  runs = json.loads(r.stdout)
-                  failed = [x for x in runs if x.get("conclusion") == "failure"][:3]
-                  if not failed:
-                      return "✅ No recent workflow failures."
-                  lines = ["*Recent failures:*"]
-                  for f in failed:
-                      name = f.get("name", "?")[:45]
-                      date = f.get("createdAt", "")[:10]
-                      url = f.get("url", "")
-                      lines.append(f"• {name} ({date})\n  [Logs]({url})")
+                      raise Exception(r.stderr.strip())
+                  data = json.loads(r.stdout)
+                  items = data.get("items", [])
+                  if not items:
+                      return "Board is empty."
+                  groups = {}
+                  for item in items:
+                      status = item.get("status", "No Status") or "No Status"
+                      if status not in ("Done", "Closed"):
+                          groups.setdefault(status, []).append(item)
+                  if not groups:
+                      return "No open board items."
+                  lines = [f"*Board ({sum(len(v) for v in groups.values())} open items)*"]
+                  for status, group_items in groups.items():
+                      lines.append(f"\n*{status}*")
+                      for item in group_items[:10]:
+                          title = item.get("title", "?")[:60]
+                          lines.append(f"  • {title}")
                   return "\n".join(lines)
               except Exception as e:
-                  return f"Error: {e}"
+                  try:
+                      snap = json.loads(open("board-snapshot.json").read())
+                      items = [i for i in snap.get("items", [])
+                               if i.get("status") not in ("Done", "Closed")]
+                      if not items:
+                          return "No open board items (from snapshot)."
+                      lines = [f"*Board snapshot ({len(items)} open)*"]
+                      for item in items[:15]:
+                          status = item.get("status", "?")
+                          title = item.get("title", "?")[:55]
+                          lines.append(f"  [{status}] {title}")
+                      return "\n".join(lines)
+                  except Exception as e2:
+                      return f"Board fetch failed: {e}; snapshot: {e2}"
 
-          # ── Route ─────────────────────────────────────────────────────────────
+          # ── /done ─────────────────────────────────────────────────────
+
+          def handle_done():
+              if not ARGS or not ARGS.strip().isdigit():
+                  tg_send("Usage: `/done <issue-number>`")
+                  return
+              issue_num = ARGS.strip()
+              r = subprocess.run([
+                  "gh", "issue", "close", issue_num,
+                  "--repo", REPO,
+                  "--comment", "Closed via Telegram /done.",
+              ], capture_output=True, text=True)
+              if r.returncode != 0:
+                  tg_send(f"Failed to close issue #{issue_num}: {r.stderr.strip()[:200]}")
+                  return
+              tg_send(f"✅ Issue #{issue_num} closed.")
+
+                    # ── Route ─────────────────────────────────────────────────────────────
 
           print(f"[process-command] cmd={CMD!r} args={ARGS!r} chat_id={CHAT_ID!r}")
 
@@ -770,6 +841,12 @@ jobs:
 
           elif CMD == "/errors":
               tg_send(get_errors())
+
+          elif CMD == "/board":
+              tg_send(get_board())
+
+          elif CMD == "/done":
+              handle_done()
 
           elif CMD == "/ask":
               pass  # Handled by ask-question job running in parallel

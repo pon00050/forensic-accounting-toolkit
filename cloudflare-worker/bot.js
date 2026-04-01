@@ -10,7 +10,10 @@
  *   /status, /triage, etc. → ACK + GitHub Actions dispatch (~30-60 sec)
  *   /ask <question>        → ACK + GHA Sonnet deep search (~1 min)
  *   /clear                 → clear conversation history from KV
- *   any other text         → Opus team leader with conversation history (5-15 sec)
+ *   /remember <text>       → save to persistent memory
+ *   /forget <keyword>      → remove from persistent memory
+ *   /memories              → list all persistent memories
+ *   any other text         → Opus team leader with conversation history + live context + memory (5-15 sec)
  *
  * Required worker secrets (set via `wrangler secret put <NAME>`):
  *   TELEGRAM_BOT_TOKEN   — bot token from @BotFather
@@ -92,7 +95,27 @@ Dispatch: /triage (2 min), /test (10 min), /orchestrate (5 min), /work (dispatch
 - When a task should be executed: suggest /work or the specific slash command.
 - When discussing strategy: draw on the vision, positioning, and business context above.
 - Never drop a message. Always respond, even "I don't have enough context — try /ask."
-- Default language: English. Respond in Korean only if the user writes in Korean or explicitly requests Korean.`;
+- Default language: English. Respond in Korean only if the user writes in Korean or explicitly requests Korean.
+
+## PERSISTENT MEMORY
+You have long-term memory that survives across conversations. Your memories are shown in the ## YOUR MEMORIES section below (injected at runtime).
+
+To save something important, end your response with a tag on its own line:
+>>SAVE: category | content
+Example: >>SAVE: decision | Deferred kr-enforcement-cases MCP tool until after first outreach response
+
+To remove an outdated memory:
+>>FORGET: memory-id
+
+Categories: decision, fact, preference, milestone, blocker
+
+Save when:
+- The user makes a deliberate decision (defer, approve, reject, choose an approach)
+- A milestone is completed (tests all pass, PR merged, outreach sent)
+- The user states a preference about how to work
+- You learn a fact that would be lost when this conversation expires
+
+Do NOT save: routine status checks, greetings, ephemeral task details, things already in your system prompt.`;
 
 const HELP_TEXT = `*Forensic Toolkit — Team Leader*
 
@@ -106,11 +129,15 @@ Commands:
 /reject <repo/PR> — close an autofix PR
 /errors — show recent workflow failures
 /ask <question> — deep codebase search via Sonnet (~1 min)
+/board — show current board (priorities + owners)
+/done <issue#> — close an issue and mark board Done
+/remember <text> — save something to my long-term memory
+/forget <keyword> — remove a memory by id or keyword
+/memories — list everything I remember
 /clear — reset conversation history
 /help — this message
 
-_Any other message: I respond directly as your team leader._
-_Questions ending with ? are also sent to /ask for deep search._`;
+_Any other message: I respond directly as your team leader._`;
 
 // ── Telegram helpers ──────────────────────────────────────────────────────────
 
@@ -159,25 +186,120 @@ async function ghDispatch(env, workflow, inputs = {}) {
   return resp.status === 204;
 }
 
-// ── Team Leader brain (Opus with conversation history) ───────────────────────
+// ── Memory helpers ────────────────────────────────────────────────────────────
+
+async function loadMemories(env) {
+  try {
+    const raw = await env.CHAT_STORE.get("memory:all");
+    return raw ? JSON.parse(raw) : { memories: [] };
+  } catch {
+    return { memories: [] };
+  }
+}
+
+async function saveMemories(env, memoriesObj) {
+  try {
+    await env.CHAT_STORE.put("memory:all", JSON.stringify(memoriesObj));
+  } catch {
+    // Non-fatal
+  }
+}
+
+function processMemoryTags(reply, memoriesObj) {
+  const lines = reply.split("\n");
+  const cleanLines = [];
+  const saves = [];
+  const forgets = [];
+
+  for (const line of lines) {
+    if (line.startsWith(">>SAVE:")) {
+      const parts = line.slice(7).trim().split("|");
+      const category = (parts[0] || "fact").trim();
+      const content = parts.slice(1).join("|").trim();
+      if (content) {
+        saves.push({
+          id: `auto-${new Date().toISOString().split("T")[0]}-${Date.now().toString(36)}`,
+          category,
+          content,
+          created: new Date().toISOString().split("T")[0],
+          importance: 7,
+        });
+      }
+    } else if (line.startsWith(">>FORGET:")) {
+      forgets.push(line.slice(9).trim());
+    } else {
+      cleanLines.push(line);
+    }
+  }
+
+  if (forgets.length > 0) {
+    memoriesObj.memories = memoriesObj.memories.filter(
+      (m) => !forgets.includes(m.id)
+    );
+  }
+  memoriesObj.memories.push(...saves);
+
+  return {
+    cleanReply: cleanLines.join("\n").trim(),
+    memoriesChanged: saves.length > 0 || forgets.length > 0,
+    updatedMemories: memoriesObj,
+  };
+}
+
+// ── Team Leader brain (Opus with conversation history + live context + memory) ─
+
+async function fetchLiveContext(env) {
+  try {
+    const resp = await fetch(
+      `https://api.github.com/repos/${env.GITHUB_REPO}/actions/variables/LIVE_CONTEXT`,
+      {
+        headers: {
+          Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+          "User-Agent": "forensic-toolkit-bot/2.0",
+          Accept: "application/vnd.github+json",
+        },
+      }
+    );
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return data.value || null;
+  } catch {
+    return null;
+  }
+}
 
 async function chatWithLeader(env, chat_id, userMessage) {
   const key = `chat:${chat_id}`;
 
-  // Load conversation history from KV
+  // Load conversation history, live context, and memories in parallel
+  const [storedHistory, liveContext, memoriesObj] = await Promise.all([
+    env.CHAT_STORE.get(key).catch(() => null),
+    fetchLiveContext(env),
+    loadMemories(env),
+  ]);
+
   let history = [];
   try {
-    const stored = await env.CHAT_STORE.get(key);
-    history = stored ? JSON.parse(stored) : [];
+    history = storedHistory ? JSON.parse(storedHistory) : [];
   } catch {
     history = [];
   }
 
-  // Add user message
   history.push({ role: "user", content: userMessage });
-
-  // Cap at 20 messages (10 turns) to stay within Opus context + CF timeout
   if (history.length > 20) history = history.slice(-20);
+
+  // Build three-tier system prompt
+  const memoriesText = memoriesObj.memories.length > 0
+    ? memoriesObj.memories
+        .map((m) => `- [${m.category}] ${m.content} (${m.created})`)
+        .join("\n")
+    : "(No memories saved yet)";
+
+  const fullSystem = SYSTEM_PROMPT
+    + "\n\n## CURRENT STATE (auto-synced from CI)\n"
+    + (liveContext || "(no live context synced yet — run /orchestrate to populate)")
+    + "\n\n## YOUR MEMORIES\n"
+    + memoriesText;
 
   let reply;
   try {
@@ -190,8 +312,8 @@ async function chatWithLeader(env, chat_id, userMessage) {
       },
       body: JSON.stringify({
         model: "claude-opus-4-6",
-        max_tokens: 1024,
-        system: SYSTEM_PROMPT,
+        max_tokens: 2048,
+        system: fullSystem,
         messages: history,
       }),
     });
@@ -213,8 +335,16 @@ async function chatWithLeader(env, chat_id, userMessage) {
     return;
   }
 
-  // Save updated history to KV (4-hour auto-expiry)
-  history.push({ role: "assistant", content: reply });
+  // Parse and strip memory tags from reply
+  const { cleanReply, memoriesChanged, updatedMemories } = processMemoryTags(reply, memoriesObj);
+
+  // Save memory changes if any
+  if (memoriesChanged) {
+    await saveMemories(env, updatedMemories);
+  }
+
+  // Save conversation history (4-hour auto-expiry)
+  history.push({ role: "assistant", content: cleanReply });
   try {
     await env.CHAT_STORE.put(key, JSON.stringify(history),
       { expirationTtl: 14400 });
@@ -222,11 +352,11 @@ async function chatWithLeader(env, chat_id, userMessage) {
     // KV write failure is non-fatal — response still sent
   }
 
-  await tgSend(env, chat_id, reply);
+  await tgSend(env, chat_id, cleanReply);
 }
 
 // ── Store message in KV history without generating a reply ───────────────────
-// Used so the leader has context about dispatched commands and /ask questions.
+// Used so the leader has context about dispatched commands.
 
 async function appendToHistory(env, chat_id, role, content) {
   const key = `chat:${chat_id}`;
@@ -267,7 +397,7 @@ export default {
       return new Response("ok"); // silently ignore
     }
 
-    // ── /clear: handled directly — reset conversation ────────────────────────
+    // ── /clear: reset conversation history ──────────────────────────────────
     if (text === "/clear" || text === "/clear@forensicbot") {
       try {
         await env.CHAT_STORE.delete(`chat:${chat_id}`);
@@ -285,26 +415,6 @@ export default {
 
     // ── Non-command messages → team leader brain ─────────────────────────────
     if (!text.startsWith("/")) {
-      // Auto-detect questions (ending with ?) → also dispatch /ask for deep search
-      if (text.endsWith("?")) {
-        // Store in history so leader has context for follow-ups
-        await appendToHistory(env, chat_id, "user", text);
-        await appendToHistory(env, chat_id, "assistant",
-          "[Dispatched to deep search agent — result arriving in ~1 min]");
-        await tgSend(env, chat_id, "Researching your question (~1 min)...");
-        const ok = await ghDispatch(env, "telegram-bot.yml", {
-          command: "/ask",
-          args: text,
-          chat_id,
-        });
-        if (!ok) {
-          await tgSend(env, chat_id,
-            "GitHub Actions dispatch failed. Check Actions tab.");
-        }
-        return new Response("ok");
-      }
-
-      // All other text → team leader responds directly
       await chatWithLeader(env, chat_id, text);
       return new Response("ok");
     }
@@ -313,6 +423,59 @@ export default {
     const parts = text.split(/\s+/);
     const cmd = parts[0].split("@")[0].toLowerCase();
     const args = parts.slice(1).join(" ");
+    const today = new Date().toISOString().split("T")[0];
+
+    // ── /remember: save to persistent memory ────────────────────────────────
+    if (cmd === "/remember") {
+      if (!args) {
+        await tgSend(env, chat_id, "Usage: /remember <text>");
+        return new Response("ok");
+      }
+      const memoriesObj = await loadMemories(env);
+      memoriesObj.memories.push({
+        id: `user-${today}-${Date.now().toString(36)}`,
+        category: "user",
+        content: args,
+        created: today,
+        importance: 8,
+      });
+      await saveMemories(env, memoriesObj);
+      await tgSend(env, chat_id, `Remembered: ${args}`);
+      return new Response("ok");
+    }
+
+    // ── /forget: remove memory by id or keyword ──────────────────────────────
+    if (cmd === "/forget") {
+      if (!args) {
+        await tgSend(env, chat_id, "Usage: /forget <id or keyword>");
+        return new Response("ok");
+      }
+      const memoriesObj = await loadMemories(env);
+      const before = memoriesObj.memories.length;
+      memoriesObj.memories = memoriesObj.memories.filter(
+        (m) => m.id !== args && !m.content.toLowerCase().includes(args.toLowerCase())
+      );
+      const removed = before - memoriesObj.memories.length;
+      await saveMemories(env, memoriesObj);
+      await tgSend(env, chat_id,
+        removed > 0 ? `Removed ${removed} memory item(s) matching: ${args}` : `No memories matched: ${args}`
+      );
+      return new Response("ok");
+    }
+
+    // ── /memories: list all persistent memories ──────────────────────────────
+    if (cmd === "/memories") {
+      const memoriesObj = await loadMemories(env);
+      if (memoriesObj.memories.length === 0) {
+        await tgSend(env, chat_id, "No memories saved yet.");
+        return new Response("ok");
+      }
+      const lines = memoriesObj.memories.map(
+        (m) => `• [${m.category}] ${m.content}\n  _id: ${m.id} | ${m.created}_`
+      );
+      await tgSend(env, chat_id, `*Memories (${memoriesObj.memories.length})*\n\n${lines.join("\n\n")}`);
+      return new Response("ok");
+    }
 
     const ACK = {
       "/status":      "Fetching status...",
@@ -324,6 +487,8 @@ export default {
       "/ask":         "Researching your question (~1 min)...",
       "/approve":     "Merging PR...",
       "/reject":      "Closing PR...",
+      "/board":       "Loading board...",
+      "/done":        "Closing issue and updating board...",
     };
 
     const ack = ACK[cmd] ?? `Processing \`${cmd}\`...`;
