@@ -323,6 +323,26 @@ If anything unexpected is encountered (test failure, missing file, structure mis
 
 ---
 
+## Exhaust Before Escalate
+
+Before asking the human to provide anything — a credential, a value, a decision, a command output — verify it cannot be obtained through autonomous means first.
+
+**The question is always: "Can I find or do this myself?"**
+
+| What's needed | Where to look first |
+|---|---|
+| API key or secret | `.env`, `.env.local` in project root |
+| Auth token or password | `.env`, then keychain / config files (`~/.config/`, `~/.netrc`) |
+| A file's contents | Read the file |
+| System or tool state | Run the command (`wrangler whoami`, `gh auth status`, `git remote -v`) |
+| A decision with a clear default | Apply the default; note what was assumed |
+
+Only after these sources are exhausted — and genuinely empty — should the task pause and surface a request to the human. An AI that asks for what it could have found itself is not autonomous; it is offloading effort.
+
+This principle has no exceptions for "convenience" or "I wasn't sure where to look." Look first. Ask only when looking fails.
+
+---
+
 ## Task Ownership Rules
 
 ### AI handles
