@@ -20,6 +20,13 @@ jobs:
       - name: Checkout hub
         uses: actions/checkout@v4
 
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+        # kr-beneish uses importlib.resources API that changed in Python 3.12;
+        # pin to 3.11 (same as tier1-tests) so collection results are consistent.
+
       - name: Checkout repos with test suites
         run: |
           REPOS=(

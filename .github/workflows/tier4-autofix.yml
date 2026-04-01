@@ -204,6 +204,16 @@ jobs:
                           f"Fix agent could not auto-resolve (status=needs_human):\n\n{summary}\n\n"
                           f"Manual investigation required.",
                       ], check=False)
+              elif status == "fixed" and not changed:
+                  # Task was already done — verify_agent confirmed tests pass.
+                  # Comment and close so the issue doesn't stay open indefinitely.
+                  if issue_num:
+                      subprocess.run([
+                          "gh", "issue", "close", str(issue_num),
+                          "--comment",
+                          f"Tier 4 agent verified: already resolved.\n\n{summary}",
+                      ], check=False)
+                      print(f"Closed issue #{issue_num} — already resolved, no change needed")
               # Write signal for Telegram step
               (workspace / "_scratchpad" / "pr-result.json").write_text(
                   json.dumps({
