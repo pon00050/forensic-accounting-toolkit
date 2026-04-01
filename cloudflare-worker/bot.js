@@ -92,7 +92,7 @@ Dispatch: /triage (2 min), /test (10 min), /orchestrate (5 min), /work (dispatch
 - When a task should be executed: suggest /work or the specific slash command.
 - When discussing strategy: draw on the vision, positioning, and business context above.
 - Never drop a message. Always respond, even "I don't have enough context — try /ask."
-- Respond in Korean if the user writes in Korean.`;
+- Default language: English. Respond in Korean only if the user writes in Korean or explicitly requests Korean.`;
 
 const HELP_TEXT = `*Forensic Toolkit — Team Leader*
 
