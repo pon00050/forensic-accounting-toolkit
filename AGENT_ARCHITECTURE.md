@@ -18,7 +18,13 @@ DETECT               SYNTHESIZE           FIX                 ESCALATE
 ──────────────────   ──────────────────   ─────────────────   ──────────
 Tier 1 (bash)   ──►  Tier 2 (Haiku)  ──►  Tier 3 (Sonnet) ──►  GitHub
 Tier 1 (bash)   ──►  Orchestrator    ──►  Tier 4 (Sonnet)      Issues +
-                     (Sonnet)                                   Escalation
+                     (Sonnet)              ▲                    Escalation
+                          │                │
+                          ▼ sync           │ /work dispatch
+                     LIVE_CONTEXT    Team Leader (Opus) ◄── Telegram
+                     GHA variable         ▲
+                                          │ memory:all (KV)
+                                     Persistent memory
 ```
 
 ---
@@ -118,46 +124,114 @@ picture and creates specific, file-level action briefs.
   exact file, line number, and command where possible
 - **Output:** `orchestrator.json` — ecosystem health score, action briefs, needs_human list
 - **Creates:** individual issues for P0/P1 briefs; batched issue for P2/P3
-- **Dispatches:** `repository_dispatch: agent-fix` for AI-actionable P0/P1 in
-  categories `CONVENTION_DRIFT`, `STUB`, `DOC_DRIFT`, `COUNT_DRIFT` (max 5/run)
+- **Dispatches:** `repository_dispatch: agent-fix` for AI-actionable P0/P1 briefs
+  (max 5/run). Categories in briefs: `CONVENTION_DRIFT`, `STUB`, `DOC_DRIFT`,
+  `COUNT_DRIFT`, `TEST_FAIL`, `DATA_QUALITY`, `INTEGRATION_GAP`, and others —
+  tier4 handles any brief with a `category` + `description` + `repo` field
 - **Escalation:** writes `escalation.md` → creates `ESCALATION` issue if
   3+ P0 issues are >7 days old
 
 ---
 
-## Human Control Layer — Telegram Bot
+## Human Control Layer — Team Leader Agent + Telegram
 
-The human controls the agent team from a phone via Telegram. The architecture
-uses a **webhook** (not polling) so commands are received instantly.
+The human controls the agent team from a phone via Telegram. The full stack has
+two layers: a **Cloudflare Worker** that is the conversational team leader
+(Opus), and **GitHub Actions** that execute heavy commands dispatched by it.
 
-### Components
+```
+Phone (Telegram)
+     │
+     ▼
+CF Worker — Team Leader (Opus 4.6)
+     │   ┌─────────────────────────────────────────────────────────┐
+     │   │ Three-tier system prompt:                                │
+     │   │  1. Static vision (Phase 1-5 arc, strategy, ecosystem)  │
+     │   │  2. LIVE_CONTEXT (CI state synced after each run)        │
+     │   │  3. memory:all KV (persistent decisions + preferences)   │
+     │   └─────────────────────────────────────────────────────────┘
+     │
+     ├── /help, /start, /clear, /remember, /forget, /memories
+     │         → handled inline by CF Worker (<1 sec)
+     │
+     └── /status, /triage, /test, /orchestrate, /work,
+         /approve, /reject, /errors, /board, /done, /ask
+               → ACK <1 sec, then workflow_dispatch to telegram-bot.yml
+                 → GHA process-command job (~30–60 sec)
+                 → result sent back to Telegram
+```
 
-**Cloudflare Worker** (`cloudflare-worker/bot.js`, `pon00050.workers.dev`)
-- Receives Telegram webhook POSTs immediately when a message is sent
-- Handles `/help` directly (no GitHub Actions involved — sub-second response)
-- For all other commands: sends an ACK to Telegram instantly, then dispatches
-  `telegram-bot.yml` via `workflow_dispatch` with `{command, args, chat_id}` inputs
-- Security: silently ignores any chat_id that doesn't match `TELEGRAM_CHAT_ID`
+### Cloudflare Worker (`cloudflare-worker/bot.js`)
 
-**`telegram-bot.yml` — `process-command` job**
-- Triggered by the CF Worker via `workflow_dispatch`
-- Executes the command and sends the result back to Telegram directly
-- Runs in ~30–60 seconds (GitHub Actions runner startup)
-- Also retains a `*/30 * * * *` fallback cron for resilience
+The team leader — not a command router. Every non-command message is processed
+by Opus 4.6 with full project context. Opus can discuss strategy, answer
+technical questions from the system prompt, and suggest which slash command to
+use for deeper work.
+
+**Team leader system prompt (three-tier):**
+- **Tier 1 — Static vision** (~2,000 tokens, hardcoded in `bot.js`): Phase 1-5
+  arc, business strategy, 13-repo ecosystem, agent team, technical rules,
+  deferred decisions, response instructions
+- **Tier 2 — Live context** (~500 tokens, from GHA variable `LIVE_CONTEXT`):
+  current health score, test pass/fail, open P0/P1 issues, latest triage
+  recommendation — refreshed automatically after every CI run
+- **Tier 3 — Persistent memory** (KV key `memory:all`, no TTL): decisions made,
+  preferences stated, milestones reached — survives conversation expiry
+
+**Conversation history:** last 20 messages stored in KV key `chat:<id>` with
+4-hour TTL. `/clear` deletes it. Slashes commands are recorded in history so
+the leader has context for follow-up questions.
+
+**Auto-save memory:** Opus appends `>>SAVE: category | content` to a response
+when something is worth remembering; the Worker strips the tag, persists the
+memory to `memory:all`, and sends only the clean reply to the user.
+`>>FORGET: id` removes an entry. User can also use `/remember` and `/forget`.
+
+### Live Context Sync (`sync-context-to-kv.yml`)
+
+Fires automatically after `orchestrator.yml`, `tier2-triage.yml`, and
+`tier1-tests.yml` complete. Also manually triggerable.
+
+**Steps:**
+1. Downloads latest artifacts: `scratchpad-orchestrator`, `scratchpad-triage`,
+   `scratchpad-tier1-tests`
+2. Reads `board-snapshot.json` from checkout
+3. Fetches open issues via `gh issue list`
+4. Condenses to ~500-token structured text:
+   ```
+   Synced: 2026-04-01 09:00 UTC
+   HEALTH: 8/10 (as of 2026-04-01)
+   BOARD: P0/P1=3 | Needs human=1
+   TESTS: 754/754 passing
+   TRIAGE: Fix kr-dart-pipeline test gap (P0, dependency: pipeline parquets)
+   OPEN ISSUES: #35 kr-dart-pipeline test gap [P0]; #31 kr-derivatives drift [P1]
+   ```
+5. Writes to GitHub Actions variable `LIVE_CONTEXT` via `gh variable set`
+
+The CF Worker reads `LIVE_CONTEXT` from the GitHub API using its existing
+`GITHUB_TOKEN` before each Opus call. No new credentials required.
 
 ### Available commands
 
-| Command | What it does | Latency |
-|---------|-------------|---------|
-| `/help` | Shows command list | <1 sec (CF Worker) |
-| `/status` | Reads latest `health_summary.json` artifact | ~45 sec |
-| `/triage` | Triggers `tier2-triage.yml` | ACK <1 sec, result ~2 min |
-| `/test` | Triggers `tier1-tests.yml` | ACK <1 sec, result ~10 min |
-| `/orchestrate` | Triggers `orchestrator.yml` | ACK <1 sec, result ~5 min |
-| `/work` | Reads latest `orchestrator.json`, dispatches tier4 for top P0/P1 brief | ACK <1 sec |
-| `/approve repo/PR` | Merges an autofix PR via `gh pr merge --squash` | ~45 sec |
-| `/reject repo/PR` | Closes an autofix PR with a comment | ~45 sec |
-| `/errors` | Shows last 3 failed workflow runs with log links | ~45 sec |
+| Command | Handled by | What it does | Latency |
+|---------|-----------|-------------|---------|
+| `/help`, `/start` | CF Worker | Shows command list | <1 sec |
+| `/clear` | CF Worker | Resets conversation history | <1 sec |
+| `/remember <text>` | CF Worker | Saves to persistent memory | <1 sec |
+| `/forget <kw>` | CF Worker | Removes memory by id or keyword | <1 sec |
+| `/memories` | CF Worker | Lists all persistent memories | <1 sec |
+| `/status` | GHA | Reads latest `health_summary.json` artifact | ~45 sec |
+| `/triage` | GHA | Triggers `tier2-triage.yml` | ACK <1s, result ~2 min |
+| `/test` | GHA | Triggers `tier1-tests.yml` | ACK <1s, result ~10 min |
+| `/orchestrate` | GHA | Triggers `orchestrator.yml` | ACK <1s, result ~5 min |
+| `/work` | GHA | Dispatches top AI-actionable P0/P1 brief to tier4 | ACK <1 sec |
+| `/board` | GHA | Live board via `gh project`; falls back to `board-snapshot.json` | ~45 sec |
+| `/done <issue#>` | GHA | Closes GitHub issue via `gh issue close` | ~45 sec |
+| `/approve repo/PR` | GHA | Merges autofix PR via `gh pr merge --squash` | ~45 sec |
+| `/reject repo/PR` | GHA | Closes autofix PR with comment | ~45 sec |
+| `/errors` | GHA | Last 3 failures across all 13 repos with log links | ~45 sec |
+| `/ask <question>` | GHA | Sonnet deep search across all repos | ACK <1s, result ~1 min |
+| _(any text)_ | CF Worker | Opus team leader responds with full context | 5–15 sec |
 
 ### Proactive notifications (push, not pull)
 
@@ -166,14 +240,16 @@ The agent team pushes to Telegram without being asked:
 - **tier4-autofix**: alert when a fix PR is created or when fix needs human
 - **orchestrator**: health summary after each synthesis run
 
-### CF Worker secrets (set in Cloudflare dashboard, not GitHub)
+### CF Worker secrets and bindings
 
-| Secret | Purpose |
-|--------|---------|
-| `TELEGRAM_BOT_TOKEN` | Bot token from @BotFather |
-| `TELEGRAM_CHAT_ID` | Authorized chat ID — all other chats silently ignored |
-| `GITHUB_TOKEN` | PAT with `repo` + `workflow` scope (same value as `ECOSYSTEM_PAT`) |
-| `GITHUB_REPO` (plain var) | `pon00050/forensic-accounting-toolkit` |
+| Name | Type | Purpose |
+|------|------|---------|
+| `TELEGRAM_BOT_TOKEN` | Secret | Bot token from @BotFather |
+| `TELEGRAM_CHAT_ID` | Secret | Authorized chat ID — all other chats silently ignored |
+| `GITHUB_TOKEN` | Secret | PAT with `repo` + `workflow` scope (same value as `ECOSYSTEM_PAT`) |
+| `ANTHROPIC_API_KEY` | Secret | Opus 4.6 calls for team leader responses |
+| `GITHUB_REPO` | Var | `pon00050/forensic-accounting-toolkit` |
+| `CHAT_STORE` | KV binding | `chat:<id>` (conversation, 4h TTL) + `memory:all` (permanent) |
 
 ---
 
@@ -211,10 +287,11 @@ fix_agent.py runs
 
 ### Dispatch sources
 
-| Source | Category | Trigger condition |
-|--------|----------|-------------------|
+| Source | Categories | Trigger condition |
+|--------|-----------|-------------------|
 | `tier1-tests.yml` | `TEST_FAIL` | Any repo fails pytest; skips if open issue exists |
-| `orchestrator.yml` | `CONVENTION_DRIFT`, `STUB`, `DOC_DRIFT`, `COUNT_DRIFT` | AI-actionable P0/P1 brief; skips if open fix PR exists |
+| `orchestrator.yml` | Any AI-actionable category | AI-actionable P0/P1 brief; skips if open fix PR exists |
+| `telegram-bot.yml` `/work` | Any AI-actionable category | User-triggered; dispatches next unblocked P0/P1 brief |
 
 ---
 
@@ -275,22 +352,36 @@ Used by every tier1 workflow.
 
 | Task type | Model | Rationale |
 |-----------|-------|-----------|
+| Team leader conversation | `claude-opus-4-6` | Strategic reasoning, open-ended discussion, ~50 msgs/day — cost approved (~$30/mo) |
 | Scan synthesis (triage, data validation) | `claude-haiku-4-5-20251001` | High-volume, structured output, cost-sensitive |
 | Deep analysis (convention audit, orchestrator) | `claude-sonnet-4-6` | Reasoning across 13 repos, cross-reference |
 | Code fixes | `claude-sonnet-4-6` | Root-cause diagnosis + targeted edit |
 | Pipeline execution | `claude-sonnet-4-6` | Long multi-step task, 40 turns, $5 budget |
+| Codebase search (`/ask`) | `claude-sonnet-4-6` | Open-ended research, full repo context |
 
-Claude Opus is never used — cost unjustified for these structured tasks.
+**Routing rule:** Opus for low-volume strategic conversation; Sonnet for autonomous
+multi-step agent tasks; Haiku for high-volume structured classification.
 
 ---
 
 ## Required Secrets
 
+### GitHub Actions secrets
+
 | Secret | Used by | Purpose |
 |--------|---------|---------|
-| `ANTHROPIC_API_KEY` | tier2, tier3, orchestrator, tier4 | All LLM calls |
+| `ANTHROPIC_API_KEY` | tier2, tier3, orchestrator, tier4, sync-context-to-kv | All LLM calls in GHA |
 | `DART_API_KEY` | tier3-pipeline | DART Open API for financial data |
-| `ECOSYSTEM_PAT` | tier1-doc-drift, tier4-autofix | Push to sibling repos + create PRs. Classic PAT, `repo` + `workflow` scopes. Without it: hub-only fixes still apply; sibling push and fix PRs skip gracefully. |
+| `ECOSYSTEM_PAT` | tier1-doc-drift, tier4-autofix, sync-context-to-kv | Push to sibling repos + create PRs + write `LIVE_CONTEXT` variable. Classic PAT, `repo` + `workflow` scopes. Without it: hub-only fixes still apply; sibling push and fix PRs skip gracefully. |
+
+### Cloudflare Worker secrets (set via `wrangler secret put`, not GitHub)
+
+| Secret | Purpose |
+|--------|---------|
+| `ANTHROPIC_API_KEY` | Opus 4.6 calls for team leader responses (~$30/mo at 50 msgs/day) |
+| `TELEGRAM_BOT_TOKEN` | Bot token from @BotFather |
+| `TELEGRAM_CHAT_ID` | Authorized chat ID |
+| `GITHUB_TOKEN` | Same value as `ECOSYSTEM_PAT` — dispatches GHA workflows and reads `LIVE_CONTEXT` variable |
 
 ---
 
@@ -328,6 +419,8 @@ Deterministic fixes (count drift, hub doc drift) skip the PR entirely:
 | Sibling repo doc drift without `ECOSYSTEM_PAT` | skips gracefully, creates issue | Configure `ECOSYSTEM_PAT` |
 | Fix PRs for sibling repos without `ECOSYSTEM_PAT` | skips gracefully | Configure `ECOSYSTEM_PAT` |
 | pykrx geo-blocked on CI | pipeline runs in `--sample` mode | Use FinanceDataReader or self-hosted runner |
-| Board access in CI (`gh project` requires `project` OAuth scope) | falls back to `board-snapshot.json` (exported at local session end) | Configure PAT with `project` scope for triage workflow |
+| Board access in CI (`gh project` requires `project` OAuth scope) | falls back to `board-snapshot.json` (exported at local session end); `/board` command uses same fallback | Configure PAT with `project` scope |
 | Convention drift autofix (structural missing files) | detected, dispatched to tier4 | tier4 handles via STUB/CONVENTION_DRIFT categories |
+| `LIVE_CONTEXT` variable not yet populated (first run) | leader says "(no live context synced yet — run /orchestrate to populate)" | Run `/orchestrate` once to seed it |
+| Opus conversation history expires after 4 hours of inactivity | restarts from seeded `memory:all`; no conversation continuity loss for facts/decisions, only small talk | By design — memories persist what matters |
 | Reasoning-required fixes that need external data (SEIBRO, API keys) | agent writes needs_human | Human handles per task ownership rules |
