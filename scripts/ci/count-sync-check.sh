@@ -48,17 +48,23 @@ for repo in "${!TEST_RUNNERS[@]}"; do
     fi
     runner="${TEST_RUNNERS[$repo]}"
     cd "$rpath"
-    # Root cause of false zeros: uv sync installs all deps but silently fails
-    # the project's own editable install. Fix: use .venv/bin/pip directly so
-    # we bypass uv's VIRTUAL_ENV detection (uv pip install requires VIRTUAL_ENV
-    # to be set; without it uv targets the wrong environment).
-    if [[ "$runner" == uv* ]] && [ -d ".venv" ]; then
-        .venv/bin/pip install -e . --quiet 2>/dev/null || true
+    # Use venv pytest directly — bypasses uv's Python resolution entirely.
+    # When setup-python@v5 is active, UV_PYTHON_INSTALL_DIR points to a temp
+    # dir that uv uses instead of the venv, causing collection failures.
+    # .venv/bin/pytest uses the exact Python that uv sync installed — no
+    # resolution, no downloads, no env-var conflicts.
+    if [ -d ".venv/bin" ] && [ -f ".venv/bin/pytest" ]; then
+        effective_runner=".venv/bin/pytest"
+    elif [ -d ".venv/Scripts" ] && [ -f ".venv/Scripts/pytest" ]; then
+        effective_runner=".venv/Scripts/pytest"
+    else
+        # kr-company-registry or any repo without a uv venv — fall back
+        effective_runner="python3 -m pytest"
     fi
     # Capture both stdout and stderr — 2>/dev/null was hiding real collection
     # errors. The grep below only matches "N tests collected" so stderr noise
     # does not corrupt the count; it just becomes visible in the workflow log.
-    count_output=$(eval "$runner tests/ --co -q 2>&1" || true)
+    count_output=$(eval "$effective_runner tests/ --co -q 2>&1" || true)
     # Parse the "N tests collected" line from anywhere in the output.
     actual=$(echo "$count_output" | grep -oP '^\d+(?= tests? collected)' | tail -1 || true)
     if [ -z "$actual" ] || [ "$actual" = "0" ]; then
