@@ -65,8 +65,13 @@ for repo in "${!TEST_RUNNERS[@]}"; do
     # errors. The grep below only matches "N tests collected" so stderr noise
     # does not corrupt the count; it just becomes visible in the workflow log.
     count_output=$(eval "$effective_runner tests/ --co -q 2>&1" || true)
-    # Parse the "N tests collected" line from anywhere in the output.
-    actual=$(echo "$count_output" | grep -oP '^\d+(?= tests? collected)' | tail -1 || true)
+    # Parse the "N tests collected" line (no ^ anchor — handles leading whitespace
+    # and different pytest versions). Falls back to counting <Function> lines
+    # for pytest versions that don't print the summary in quiet+collect mode.
+    actual=$(echo "$count_output" | grep -oP '\d+(?= tests? collected)' | tail -1 || true)
+    if [ -z "$actual" ]; then
+        actual=$(echo "$count_output" | grep -c '^    <Function \|^<Function ' || true)
+    fi
     if [ -z "$actual" ] || [ "$actual" = "0" ]; then
         # Treat as collection failure, not a genuine zero-test count.
         # Log the FIRST lines (where ImportError appears) so we can diagnose.
