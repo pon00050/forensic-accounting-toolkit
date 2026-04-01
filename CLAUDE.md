@@ -14,7 +14,7 @@ Thirteen repos across four layers. Each is an independent git repo.
 |---------|------|---------|-------|
 | **kr-company-registry** | `../kr-company-registry` | DART↔KRX↔BRN↔CRN identifier crosswalk (3,949 companies) | 18 |
 | **kr-trading-calendar** | `../kr-trading-calendar` | KRX trading-day math (holidays, offsets, ranges) | 13 |
-| **kr-beneish** | `../kr-beneish` | Beneish M-Score for Korean IFRS companies | 70 |
+| **kr-beneish** | `../kr-beneish` | Beneish M-Score for Korean IFRS companies | 73 |
 | **jfia-catalog** | `../jfia-catalog` | 469 JFIA forensic accounting articles (structured JSON) | 8 |
 
 ### Analysis Libraries (standalone, consume data files not code)
