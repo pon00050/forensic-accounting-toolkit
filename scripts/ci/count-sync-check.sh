@@ -65,18 +65,18 @@ for repo in "${!TEST_RUNNERS[@]}"; do
     # errors. The grep below only matches "N tests collected" so stderr noise
     # does not corrupt the count; it just becomes visible in the workflow log.
     count_output=$(eval "$effective_runner tests/ --co -q 2>&1" || true)
-    # Parse the "N tests collected" line (no ^ anchor — handles leading whitespace
-    # and different pytest versions). Falls back to counting <Function> lines
-    # for pytest versions that don't print the summary in quiet+collect mode.
+    # Parse the "N tests collected" line. Falls back to counting <Function>
+    # lines for pytest versions that use "collected N items" format.
     actual=$(echo "$count_output" | grep -oP '\d+(?= tests? collected)' | tail -1 || true)
     if [ -z "$actual" ]; then
-        actual=$(echo "$count_output" | grep -c '^    <Function \|^<Function ' || true)
+        actual=$(echo "$count_output" | grep -c '<Function ' || echo "0")
     fi
+    echo "  [count-sync] $repo: runner=$effective_runner actual=$actual"
     if [ -z "$actual" ] || [ "$actual" = "0" ]; then
         # Treat as collection failure, not a genuine zero-test count.
-        # Log the FIRST lines (where ImportError appears) so we can diagnose.
-        echo "  [count-sync] COLLECTION FAILED for $repo — first error lines:"
-        echo "$count_output" | grep -E "Error|error|FAILED|import" | head -4 | sed 's/^/    /'
+        # Log all output so we can diagnose import errors.
+        echo "  [count-sync] COLLECTION FAILED for $repo — output:"
+        echo "$count_output" | head -10 | sed 's/^/    /'
         COLLECTION_FAILED[$repo]=1
         actual=0
     fi
