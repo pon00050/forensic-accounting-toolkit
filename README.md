@@ -31,7 +31,7 @@ Thirteen repositories, one platform. Each is an independent project with its own
 | [kr-dart-pipeline](https://github.com/pon00050/kr-dart-pipeline) | ETL: 15 extractors (DART/KRX/SEIBRO/KFTC/FSC) → standardized parquets |
 | [kr-anomaly-scoring](https://github.com/pon00050/kr-anomaly-scoring) | CB/BW + timing + officer network anomaly scoring |
 | [kr-stat-tests](https://github.com/pon00050/kr-stat-tests) | 14 statistical validation tests (PCA, bootstrap, LASSO, RF…) |
-| [krff-shell](https://github.com/pon00050/krff-shell) | Delivery shell: CLI, reports, review queue, DuckDB query layer, MCP server (10 tools) |
+| [krff-shell](https://github.com/pon00050/krff-shell) | Delivery shell: CLI, reports, review queue, DuckDB query layer, MCP server (11 tools) |
 
 ## Dependency graph
 
@@ -43,7 +43,7 @@ kr-forensic-core  ← shared constants, schemas, path conventions (zero external
     ├── kr-stat-tests          (reads parquets + CSVs)
     └── krff-shell             (delivery: CLI + reports + review queue)
 
-jfia-catalog ──► jfia-forensic ──► krff-shell (MCP server, 10 tools)
+jfia-catalog ──► jfia-forensic ──► krff-shell (MCP server, 11 tools)
                                         ▲
 kr-company-registry ────────────────────┤ (corp_code ↔ ticker)
 kr-trading-calendar ────────────────────┤ (trading-day math)
@@ -74,6 +74,23 @@ This toolkit applies option-pricing theory and forensic accounting techniques to
 **Convertible bond dilution screening** — Korean convertible bonds (전환사채) and bonds with warrants (신주인수권부사채) are a known vector for minority shareholder dilution on KOSDAQ. A company issues a CB with a conversion price set below the current stock price, meaning the bondholder profits at issuance before any repricing. By treating the embedded conversion option as a European call (Black-Scholes), we can screen the entire DART dataset for suspicious issuances without needing commercial SEIBRO data.
 
 Supporting capabilities include M-Score earnings manipulation detection (Beneish), company identifier resolution across four Korean numbering systems, trading calendar math for KRX, and a growing library of forensic accounting "detectlets" derived from JFIA academic literature.
+
+## Write-ups
+
+Each component has its own stand-alone write-up. The full case study is at
+[ronanwrites.vercel.app/projects/forensic-accounting-toolkit](https://ronanwrites.vercel.app/projects/forensic-accounting-toolkit).
+
+| Component | Write-up |
+|---|---|
+| `kr-company-registry` | [3,949 Companies. Four Numbering Systems. One Table.](https://ronanwrites.vercel.app/manuals/korean-company-identifier-crosswalk) |
+| `kr-trading-calendar` | [60 Calendar Days Is 38 Trading Days.](https://ronanwrites.vercel.app/manuals/korean-trading-day-math) |
+| `kr-beneish` | [The Beneish M-Score, Reimplemented for Korean IFRS.](https://ronanwrites.vercel.app/manuals/beneish-mscore-korean-ifrs) |
+| `jfia-catalog` | [Sixteen Years of Forensic Accounting Research, in One JSON File.](https://ronanwrites.vercel.app/manuals/jfia-catalog-469-articles) |
+| `kr-derivatives` | [Pricing Convertible-Bond Dilution Without SEIBRO.](https://ronanwrites.vercel.app/manuals/cb-bw-dilution-screen-without-seibro) |
+| `jfia-forensic` | [Detectlets: Compiling Forensic Accounting Research Into Computable Detection Modules.](https://ronanwrites.vercel.app/manuals/jfia-detectlets-from-literature-to-code) |
+| `kr-enforcement-cases` | [240 Korean Accounting Violations, Coded Once.](https://ronanwrites.vercel.app/manuals/korean-enforcement-cases) |
+| Platform (4 repos) | [Splitting a Forensic-Finance Monolith into Four Repos.](https://ronanwrites.vercel.app/manuals/forensic-platform-architecture) |
+| `krff-shell` | [An MCP Server for Korean Forensic Finance.](https://ronanwrites.vercel.app/manuals/krff-shell-mcp-natural-language-finance) |
 
 ## License
 
