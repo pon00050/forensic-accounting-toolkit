@@ -39,7 +39,7 @@ See `cross-issues/` for details. Summary:
 
 ## Technical Backlog (Prioritized)
 
-### P0 — Enables credible demo and outreach
+### P0 — Enables a credible public demo
 - [x] Fix split-adjusted prices in kr-dart-pipeline (XB-001) ✓ (2026-03-15)
 - [x] Publish 5 repos to GitHub (beneish, derivatives, calendar, jfia-catalog, jfia-forensic) ✓ (2026-03-15)
 - [x] Add CLAUDE.md to kr-trading-calendar ✓ (2026-03-15)
@@ -66,8 +66,6 @@ See `cross-issues/` for details. Summary:
 
 | What | Where |
 |------|-------|
-| Platform strategy (9 docs) | `../krff-shell/00_Reference/10_Platform_Strategy/` |
-| Business strategy | `../krff-shell/00_Reference/11_Business_Outreach/` |
 | kr-derivatives Run 2 plan | `../kr-derivatives/reports/second_run_prep.md` |
 | kr-derivatives Run 3 lessons | `../kr-derivatives/reports/third_run_lessons.md` |
 | kr-derivatives Run 4 plan | `../kr-derivatives/reports/fourth_run_prep.md` |

@@ -71,12 +71,11 @@ kr-enforcement-cases produces **enforcement labels** for supervised model traini
 ## How to Navigate
 
 - **Cross-project blockers**: `cross-issues/` in this directory
-- **Business outreach & deadlines**: `knowledge/business/` (gitignored)
 - **Per-project details**: Read the CLAUDE.md in each project's root
-- **Platform strategy docs**: `../krff-shell/00_Reference/10_Platform_Strategy/`
 - **Ecosystem status**: `ECOSYSTEM.md` in this directory
 - **Cross-repo operations**: `bash ecosystem.sh <command>` (see below)
 - **Step-by-step workflows**: `WORKFLOW.md` in this directory
+- **Local-only notes** (not for public docs): see the gitignored working directories
 
 ---
 
@@ -216,28 +215,19 @@ Every doc in the ecosystem falls into exactly one of three layers:
 | Layer | What | Where | Git-tracked? |
 |-------|------|-------|-------------|
 | **1. Repo-local public** | CLAUDE.md, README.md, `docs/` (API docs), `reports/` (run logs), `articles/` (learning content) | Each repo | Yes |
-| **2. Hub domain knowledge** | Regulatory, business, legal, competitive, stakeholder, strategic analysis | `knowledge/` (this hub only) | No (gitignored) |
+| **2. Hub local-only** | Working notes not appropriate for public repos | `knowledge/` (this hub only) | No (gitignored) |
 | **3. Hub operational** | ECOSYSTEM.md, WORKFLOW.md, ARCHITECTURE.md, cross-issues/, content/captures/ | Hub root | Yes |
 
 **Decision tree — "Where does this doc go?"**
 - Needed to understand/use the code in one specific repo? → Layer 1 (that repo's `docs/` or `reports/`)
-- Domain knowledge (regulatory, business, legal, market, strategy)? → Layer 2 (hub `knowledge/`)
+- Working notes not for public consumption? → Layer 2 (hub `knowledge/`, gitignored)
 - Cross-project coordination? → Layer 3 (hub root)
 
-Repos do **not** maintain local `knowledge/` directories. All domain knowledge lives exclusively in the hub vault.
+Repos do **not** maintain local `knowledge/` directories.
 
 ## Knowledge Vault
 
-Domain knowledge for the ecosystem lives in `knowledge/` (gitignored — private business intelligence). This is the **canonical hub vault**: the single maintained copy that covers all 13 repos.
-
-### What belongs in the hub vault
-
-- Regulatory analysis (FSC/FSS/FSCMA/CPA Act, enforcement patterns)
-- Business intelligence (buyer dossiers, competitive landscape, channel analysis, pricing)
-- Legal compliance research (신용정보법, KOGL, DART ToS, PIPA)
-- Market intelligence (positioning, funding programs, monetization models)
-- Strategic hypotheses (research agenda, publication potential)
-- Build decision logs with cross-project value (pattern: `knowledge/context/technical/`)
+The hub maintains a local-only `knowledge/` directory (gitignored) for notes that are not appropriate for the public repos — regulatory analysis, legal compliance research, and other working-notes material. This is the canonical location; per-repo `knowledge/` directories are not maintained.
 
 ### Frontmatter contract (gold standard)
 
@@ -280,10 +270,9 @@ related:
 ### Triage System
 - **Never duplicate triage-scan.sh logic** in move-forward skills. Call it as a subprocess and wrap output.
 - **triage-last.json** is updated by triage-scan.sh. Do not edit it manually.
-- **outreach-tracker.md** in `knowledge/business/` is the authoritative record for all client contacts.
 
 ### Publication Rules
-- All repos are fully public. Never publish client-specific analysis to these repos.
+- All repos are fully public. Keep repository content scoped to the engineering artifact (code, docs, reproducible data).
 - Version tags follow semver.
 
 ---
@@ -293,8 +282,7 @@ related:
 You are in the coordination hub. Your job here is to:
 1. Track cross-project blockers (not per-project bugs — those stay in each repo)
 2. Maintain the ecosystem map and publication status
-3. Track business outreach tasks and deadlines
-4. Help the human decide what to work on next across all projects
+3. Help the human decide what to work on next across all projects
 
 Do NOT write code here. Do NOT duplicate information that belongs in a sub-project's own docs.
 When you need to understand a sub-project, read its CLAUDE.md first.
@@ -354,7 +342,7 @@ This principle has no exceptions for "convenience" or "I wasn't sure where to lo
 
 ### Human handles
 - Phone calls (KSD, government agencies)
-- LinkedIn/email outreach (InMails, job applications)
+- External correspondence sent in a personal capacity
 - Web portal logins requiring 2FA (PyPI, SEIBRO registration)
 - Spending money (PyPI tokens, API subscriptions)
 - Deleting published repos or irreversible external actions
