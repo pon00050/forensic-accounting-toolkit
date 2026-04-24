@@ -381,3 +381,27 @@ without adding safety — the gate already happened.
 > If the action would have been the **next automatic step** in the workflow had
 > everything gone right, and the verification that "everything went right" has
 > already run — just do it.
+
+---
+
+## NEVER commit to ANY public repo (this hub or any sibling)
+
+All 13 repos in this ecosystem are public. Before staging or writing any new file in this directory or any sibling project, check the list below. If the content matches any item, it stays in this hub's gitignored `knowledge/` working directory, NOT in any tracked location.
+
+**Hard NO list (applies to every repo):**
+
+1. **Any API key, token, or credential — even a truncated fingerprint.** Anthropic (sk-ant-...), AWS (AKIA...), GitHub (ghp_...), DART/SEIBRO/KFTC/FRED keys. Even partial/display-truncated keys leak the org-to-key linkage.
+2. **Payment / billing data of any kind.** Card last-four, invoice IDs, receipt numbers, billing-portal URLs, vendor account states (balance, spend cap, tier).
+3. **Vendor support correspondence.** Subject lines, body text, ticket IDs, summaries.
+4. **Named third-party outreach targets.** Specific company / fund / firm / individual names appearing in a planning, pitch, or outreach context. Engineering content discussing institutions in a neutral domain context is fine; planning text naming them as a sales target is not.
+5. **Commercial-positioning memos.** Documents discussing buyer segments, monetization, pricing strategy, competitor analysis, GTM. Research methodology and technical roadmaps are fine; commercial strategy is not.
+6. **Files matching the leak-prevention .gitignore patterns** (*_prep.md, *_billing*, *_outreach*, *_strategy*, *_positioning*, *_pricing*, *_buyer*, *_pitch*, product_direction.md, PORTFOLIO_REFRAME*.md, PLAN-OUTREACH*.md). The patterns are present in every repo's .gitignore as of 2026-04-24.
+
+**Backstops in place:**
+- Every repo has GitHub Push Protection enabled — credential pushes are rejected server-side.
+- Every repo has the leak-prevention .gitignore patterns above.
+- Every repo's CLAUDE.md carries the same hard NO list.
+
+These are backstops, not the primary defense. Write-time discipline is. When in doubt, write to `knowledge/` here in the hub.
+
+**Recovery is expensive.** A force-push history rewrite is recoverable for the file at HEAD but the orphaned commits remain resolvable on GitHub for weeks. GitHub Support will not garbage-collect orphaned commits for non-credential content. Prevention >> remediation.
