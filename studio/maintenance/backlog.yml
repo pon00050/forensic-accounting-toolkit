@@ -1,0 +1,51 @@
+# Studio refinement backlog — seeded 2026-06-17 from the ecosystem work-surface audit.
+# safety: SAFE (autonomous fix->verify->auto-merge) | NEEDS-REVIEW (propose only) | HUMAN-ONLY
+items:
+  - id: TEST-stat
+    class: test-addition
+    safety: SAFE
+    repo: kr-stat-tests
+    status: open
+    summary: "Synthetic fixture parquets + behavioral tests for the 14 stat scripts (3.4k LOC, only 5 tests today)."
+  - id: TEST-dart
+    class: test-addition
+    safety: SAFE
+    repo: kr-dart-pipeline
+    status: open
+    summary: "Tests for the 15 extractors + transform.py (currently untested)."
+  - id: TEST-enf
+    class: test-addition
+    safety: SAFE
+    repo: kr-enforcement-cases
+    status: open
+    summary: "Fixture parquets to lift coverage beyond '65 tests for 19 modules'."
+  - id: TYPES-core
+    class: type-hints
+    safety: SAFE
+    repo: kr-forensic-core
+    status: open
+    summary: "Type hints + docstrings on the shared foundation (9% return-hint coverage)."
+  - id: LINT-eco
+    class: lint-fix
+    safety: SAFE
+    repo: all
+    status: open
+    summary: "Add ruff+mypy config ecosystem-wide (8/12 repos lack it); ruff --fix."
+  - id: DOC-enf-count
+    class: doc-count-sync
+    safety: SAFE
+    repo: kr-enforcement-cases
+    status: open
+    summary: "README says violations.csv=240; actual ~6,235. Regenerate counts from files."
+  - id: DEDUP-krff
+    class: refactor
+    safety: NEEDS-REVIEW
+    repo: krff-shell
+    status: open
+    summary: "02_Pipeline/03_Analysis hold ~9.7k LOC of diverged ETL copies; de-dup needs test refactor + sign-off."
+  - id: SEIBRO
+    class: data-source
+    safety: HUMAN-ONLY
+    repo: kr-dart-pipeline
+    status: open
+    summary: "SEIBRO/XB-002 external API; re-check whether live (April ETA passed) before any work."

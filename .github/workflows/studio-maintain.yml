@@ -1,0 +1,96 @@
+name: "Studio — Maintenance Crew (internal-only)"
+
+# Self-running refinement loop. Discovery is deterministic (no LLM); execution
+# (fix→verify→auto-merge) reuses scripts/agents/{fix_agent,verify_agent}.py and runs
+# only on mode=full once ANTHROPIC_API_KEY is configured. Gated by FLEET_ENABLED.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "smoke = discovery only (no changes); full = fix→verify→merge (needs ANTHROPIC_API_KEY)"
+        type: choice
+        options:
+          - smoke
+          - full
+        default: smoke
+  schedule:
+    - cron: "0 22 * * 3"   # weekly Wed 22:00 UTC; gated by FLEET_ENABLED
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: studio-maintain
+  cancel-in-progress: false
+
+jobs:
+  maintain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Heartbeat gate
+        id: hb
+        uses: ./.github/actions/studio-heartbeat
+        with:
+          fleet_enabled: ${{ vars.FLEET_ENABLED }}
+
+      - name: Skipped (fail-closed)
+        if: ${{ steps.hb.outputs.proceed != 'true' }}
+        run: echo "Studio maintenance skipped — ${{ steps.hb.outputs.reason }}"
+
+      - name: Set up Python
+        if: ${{ steps.hb.outputs.proceed == 'true' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install PyYAML
+        if: ${{ steps.hb.outputs.proceed == 'true' }}
+        run: pip install --quiet pyyaml
+
+      - name: Discovery (deterministic — the work queue)
+        if: ${{ steps.hb.outputs.proceed == 'true' }}
+        run: |
+          mkdir -p studio/reports
+          out="studio/reports/maintenance-$(date -u +%Y-%m-%d).md"
+          python studio/maintenance/discover.py --backlog studio/maintenance/backlog.yml --out "$out"
+          python studio/provenance.py stamp "$out" --loop studio-maintain --model none-deterministic \
+            --inputs studio/maintenance/backlog.yml
+          echo "| $(date -u +%Y-%m-%dT%H:%M:%SZ) | studio-maintain | discovery | ok | report written |" >> studio/run-log.md
+
+      - name: Execute (fix → verify → auto-merge) — needs ANTHROPIC_API_KEY
+        if: ${{ steps.hb.outputs.proceed == 'true' && github.event.inputs.mode == 'full' }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          echo "Full execution reuses scripts/agents/fix_agent.py -> verify_agent.py (the two-agent gate)."
+          echo "One SAFE backlog item -> one repo/branch/PR -> fresh verify -> auto-merge on green."
+          echo "Wired in Phase 3 (see AGENT_TEAM_REDESIGN.md). Discovery above is the queue source."
+
+      - name: Stage + domain guardrail (data/raw immutable)
+        if: ${{ steps.hb.outputs.proceed == 'true' }}
+        run: |
+          git add studio/reports studio/run-log.md
+          mapfile -t changed < <(git diff --cached --name-only)
+          if [ ${#changed[@]} -gt 0 ]; then
+            python studio/guardrails/check_domain_rules.py --paths "${changed[@]}"
+          else
+            echo "no staged changes"
+          fi
+
+      - name: Commit + push
+        if: ${{ steps.hb.outputs.proceed == 'true' }}
+        run: |
+          git config user.name "studio-bot[bot]"
+          git config user.email "studio-bot@users.noreply.github.com"
+          if git diff --staged --quiet; then
+            echo "nothing to commit"
+          else
+            git commit -m "studio: maintenance discovery $(date -u +%Y-%m-%d) [skip ci]"
+            git pull --rebase origin "${GITHUB_REF_NAME}" 2>/dev/null || true
+            git push
+          fi

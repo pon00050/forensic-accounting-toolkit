@@ -1,0 +1,55 @@
+name: "Studio heartbeat gate"
+description: >
+  Fail-closed gate. Only proceeds if the fleet master switch is on and the
+  dead-man's-switch check-in is within window. Never fails the job itself —
+  gating is via the 'proceed' output, so a disabled fleet is a green no-op.
+
+inputs:
+  fleet_enabled:
+    description: "Value of the FLEET_ENABLED repo variable"
+    required: true
+  checkin_max_days:
+    description: "Dead-man's-switch window in days"
+    required: false
+    default: "120"
+
+outputs:
+  proceed:
+    description: "'true' if the loop may run"
+    value: ${{ steps.gate.outputs.proceed }}
+  reason:
+    description: "Why the gate decided as it did"
+    value: ${{ steps.gate.outputs.reason }}
+
+runs:
+  using: composite
+  steps:
+    - id: gate
+      shell: bash
+      run: |
+        proceed=true
+        reason="enabled and within check-in window"
+        if [ "${{ inputs.fleet_enabled }}" != "true" ]; then
+          proceed=false
+          reason="FLEET_ENABLED is not 'true' (master switch off)"
+        else
+          ck="studio/state/LAST_CHECKIN"
+          if [ -f "$ck" ]; then
+            last=$(head -1 "$ck" | tr -d '[:space:]')
+            last_epoch=$(date -d "$last" +%s 2>/dev/null || echo 0)
+            now_epoch=$(date +%s)
+            max=$(( ${{ inputs.checkin_max_days }} * 86400 ))
+            if [ "$last_epoch" -gt 0 ] && [ $(( now_epoch - last_epoch )) -gt "$max" ]; then
+              proceed=false
+              reason="dead-man's switch: no check-in since $last (> ${{ inputs.checkin_max_days }}d)"
+            fi
+          fi
+        fi
+        echo "proceed=$proceed" >> "$GITHUB_OUTPUT"
+        echo "reason=$reason" >> "$GITHUB_OUTPUT"
+        echo "Heartbeat: proceed=$proceed ($reason)"
+        {
+          echo "### Studio heartbeat"
+          echo "- proceed: \`$proceed\`"
+          echo "- reason: $reason"
+        } >> "$GITHUB_STEP_SUMMARY"

@@ -35,6 +35,15 @@
             "command": "python3 C:/Users/pon00/Projects/forensic-accounting-toolkit/.claude/hooks/pre-commit-test-guard.py"
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 C:/Users/pon00/Projects/forensic-accounting-toolkit/studio/guardrails/pre_data_raw_guard.py"
+          }
+        ]
       }
     ],
     "PostToolUse": [

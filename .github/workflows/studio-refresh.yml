@@ -1,0 +1,95 @@
+name: "Studio — Data Refresh (internal-only)"
+
+# Self-running data-refresh loop. Gated by the FLEET_ENABLED master switch via the
+# heartbeat action — a disabled fleet is a green no-op (no email). See studio/README.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "smoke = plumbing check (no secrets); full = real DART refresh (needs DART_API_KEY)"
+        type: choice
+        options:
+          - smoke
+          - full
+        default: smoke
+  schedule:
+    - cron: "0 21 * * 0"   # weekly Sun 21:00 UTC; gated by FLEET_ENABLED
+
+permissions:
+  contents: write
+
+concurrency:
+  group: studio-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Heartbeat gate
+        id: hb
+        uses: ./.github/actions/studio-heartbeat
+        with:
+          fleet_enabled: ${{ vars.FLEET_ENABLED }}
+
+      - name: Skipped (fail-closed)
+        if: ${{ steps.hb.outputs.proceed != 'true' }}
+        run: echo "Studio refresh skipped — ${{ steps.hb.outputs.reason }}"
+
+      - name: Set up Python
+        if: ${{ steps.hb.outputs.proceed == 'true' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install PyYAML (provenance/discovery helpers)
+        if: ${{ steps.hb.outputs.proceed == 'true' }}
+        run: pip install --quiet pyyaml
+
+      - name: Smoke — plumbing check (no secrets)
+        if: ${{ steps.hb.outputs.proceed == 'true' && github.event.inputs.mode != 'full' }}
+        run: |
+          mkdir -p studio/reports
+          stamp="studio/reports/refresh-$(date -u +%Y-%m-%d).md"
+          {
+            echo "# Studio data-refresh (smoke) — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo
+            echo "Heartbeat passed; runner ready; provenance + commit path exercised."
+            echo "No ETL executed (smoke). Full refresh runs on mode=full once DART_API_KEY is set."
+          } > "$stamp"
+          python studio/provenance.py stamp "$stamp" --loop studio-refresh --model none-deterministic
+          echo "| $(date -u +%Y-%m-%dT%H:%M:%SZ) | studio-refresh | smoke | ok | plumbing verified |" >> studio/run-log.md
+
+      - name: Full — real DART refresh (needs DART_API_KEY)
+        if: ${{ steps.hb.outputs.proceed == 'true' && github.event.inputs.mode == 'full' }}
+        env:
+          DART_API_KEY: ${{ secrets.DART_API_KEY }}
+        run: bash studio/loops/refresh.sh
+
+      - name: Stage + domain guardrail (data/raw immutable)
+        if: ${{ steps.hb.outputs.proceed == 'true' }}
+        run: |
+          git add studio/reports studio/run-log.md
+          mapfile -t changed < <(git diff --cached --name-only)
+          if [ ${#changed[@]} -gt 0 ]; then
+            python studio/guardrails/check_domain_rules.py --paths "${changed[@]}"
+          else
+            echo "no staged changes"
+          fi
+
+      - name: Commit + push
+        if: ${{ steps.hb.outputs.proceed == 'true' }}
+        run: |
+          git config user.name "studio-bot[bot]"
+          git config user.email "studio-bot@users.noreply.github.com"
+          if git diff --staged --quiet; then
+            echo "nothing to commit"
+          else
+            git commit -m "studio: data refresh $(date -u +%Y-%m-%d) [skip ci]"
+            git pull --rebase origin "${GITHUB_REF_NAME}" 2>/dev/null || true
+            git push
+          fi
