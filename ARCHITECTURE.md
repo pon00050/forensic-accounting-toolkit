@@ -1,14 +1,14 @@
 # Korean Forensic Accounting Ecosystem — Architecture Diagram
 
-> Generated: 2026-03-26
-> 13 repos · 11 code packages · ~732 tests
+> Generated: 2026-03-26 · data-flow structure still current 2026-06-17 (operational state: see `RESUMING.md`)
+> 13 repos · 11 code packages · ~752 tests
 
 ---
 
 ```
 ╔══════════════════════════════════════════════════════════════════════════════════════════╗
 ║                    KOREAN FORENSIC ACCOUNTING ECOSYSTEM                                  ║
-║                    13 repos · 11 code packages · ~732 tests                              ║
+║                    13 repos · 11 code packages · ~752 tests                              ║
 ╚══════════════════════════════════════════════════════════════════════════════════════════╝
 
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
@@ -125,7 +125,7 @@
 │  Beneish M-Score for Korean IFRS        │  reads: company_financials.parquet            │
 │  8-ratio model (DSRI, GMI, AQI…)       │  writes: beneish_scores.parquet               │
 │  labeled fraud dataset (30 companies)   │  threshold: -1.78 (from kr-forensic-core)     │
-│  (61 tests)                             │                                               │
+│  (73 tests)                             │                                               │
 └─────────────────────────────────────────┼───────────────────────────────────────────────┘
                                           ▼
                           ┌───────────────────────────┐

@@ -48,8 +48,8 @@ provenance-stamped, machine-generated/unreviewed; nothing is published as a fore
 
 ## Health snapshot at shelving
 
-- **All 13 repos pass their tests.** 842 tests across the 12 standalone repos, plus
-  **krff-shell 317** — all green.
+- **All 13 repos pass their tests.** ~752 tests total — 435 across the 11 library repos plus
+  **krff-shell's 317** — all green (matches the hub CLAUDE.md ecosystem table).
   - krff-shell gotcha: its MCP tests need the dev optional-extra. For local runs use
     **`uv sync --extra dev`** before `pytest` (CI already does this). Without the extra,
     11 async MCP tests error with "no plugin handled async fixture" — that is an

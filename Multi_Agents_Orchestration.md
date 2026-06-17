@@ -1,5 +1,10 @@
 # Multi-Agent Orchestration — Core Mental Models
 
+> **Reference only (2026-06-17).** The agent team described here (deployed 2026-03-31) is **disabled
+> and superseded** by the Forensic Studio (`studio/`, `AGENT_TEAM_REDESIGN.md`). A 2026-06-17 audit
+> also found parts of this document were aspirational — never fully wired into the shipped code. Treat
+> it as design philosophy, not a description of running behavior. Current state: `RESUMING.md`.
+
 This document extracts the tacit knowledge behind Anthropic's production multi-agent
 system, derived from three internal source files: `coordinatorMode.ts` (370 lines),
 `AgentTool/prompt.ts` (288 lines), and `forkSubagent.ts` (211 lines). These are not

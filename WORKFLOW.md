@@ -2,6 +2,11 @@
 
 Practical command sequences for common operations in the forensic accounting ecosystem. All commands assume you're in the hub directory (`C:\Users\pon00\Projects\forensic-accounting-toolkit`) unless noted otherwise.
 
+> **Status (2026-06-17): project shelved from active development.** These interactive workflows still
+> work if you resume hands-on work, but day-to-day upkeep now runs autonomously via the **Forensic
+> Studio** (`studio/README.md`) and the legacy GitHub Actions automation is disabled. Start from
+> **`RESUMING.md`**.
+
 ---
 
 ## 1. Starting a Session

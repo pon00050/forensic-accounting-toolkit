@@ -2,6 +2,8 @@
 
 Coordination hub for a multi-repo Korean forensic accounting ecosystem. All code lives in the component repositories listed below — this repo contains the orchestration layer: cross-project issue tracking, ecosystem status, workflow documentation, and CI scripts.
 
+> **Status (2026-06-17):** shelved from active development; autonomous internal-only upkeep runs via the **Forensic Studio** (`studio/`). New here or resuming? Read **`RESUMING.md`** first.
+
 ## The ecosystem
 
 Thirteen repositories, one platform. Each is an independent project with its own tests, documentation, and release cycle.
@@ -59,8 +61,12 @@ Data flow: `kr-dart-pipeline` writes parquets → `kr-anomaly-scoring`, `kr-stat
 ## What's in this repo
 
 ```
+RESUMING.md           # START HERE if resuming — current operational state (shelved + Studio)
 ECOSYSTEM.md          # Publication status, blockers, prioritized backlog
 WORKFLOW.md           # Step-by-step command sequences for common operations
+studio/               # Forensic Studio — self-running internal-only upkeep (see studio/README.md)
+AGENT_TEAM_REDESIGN.md # Design of the autonomous studio + adversarial review
+CHANGELOG.md          # Audit trail of ecosystem changes
 cross-issues/         # Cross-project blockers (XB-001, XB-002, ...)
 ecosystem.sh          # Multi-repo git status, test runner, parquet sync
 triage-scan.sh        # Automated 10-source task scanner

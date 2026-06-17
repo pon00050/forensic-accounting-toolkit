@@ -82,7 +82,7 @@ running daily and consuming Anthropic API spend with no one working the project.
 - Deleted two GitHub-notification `.eml` files.
 - Fixed a CLAUDE.md doc/reality mismatch (`content/` is gitignored Layer-2, not tracked Layer-3).
 
-**Health verified at shelving:** all 13 repos green (842 tests + krff-shell 317); zero unpushed
+**Health verified at shelving:** all 13 repos green (~752 tests: 435 libraries + krff-shell 317); zero unpushed
 commits anywhere. krff-shell's 11 MCP tests need the dev extra locally (`uv sync --extra dev`) —
 its own CI already does this, so not a code defect.
 

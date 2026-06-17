@@ -100,7 +100,8 @@ not broken logic — the ideal profile for autonomous agents. The work, by auton
 - **Lint/type config.** Only 4 of 12 repos configure ruff; no repo has mypy wired ecosystem-wide.
   Add a consistent `[tool.ruff]`/`[tool.mypy]` block + `ruff check --fix`.
 - **Doc-count sync.** `kr-enforcement-cases` README says `violations.csv` = 240 rows; it's actually
-  **6,235**. ECOSYSTEM.md still says kr-beneish "61 tests" (it's 73). Regenerate from files.
+  **6,235** (still needs fixing). ECOSYSTEM.md's kr-beneish count drift (was 61, should be 73) is
+  now **auto-reconciled by the Studio's `sync_doc_counts.py`** — fixed automatically on 2026-06-17.
 
 **NEEDS REVIEW (agent drafts, human signs off):**
 - **krff-shell monolith de-duplication.** `02_Pipeline/` + `03_Analysis/` hold ~9,700 LOC of copies

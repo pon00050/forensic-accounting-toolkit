@@ -2,6 +2,13 @@
 
 This is **not a code project**. It is the orchestration layer for a multi-repo Korean forensic accounting ecosystem. All code lives in sibling directories under `C:\Users\pon00\Projects\`.
 
+> **Status (2026-06-17): shelved from active development.** Autonomous upkeep now runs via the
+> **Forensic Studio** (`studio/`, designed in `AGENT_TEAM_REDESIGN.md`). The legacy tier1–4 GitHub
+> Actions automation and the Telegram/Cloudflare control plane described in this file and in
+> `AGENT_ARCHITECTURE.md` / `Multi_Agents_Orchestration.md` are **disabled**. For the current
+> operational state and how to resume, read **`RESUMING.md`** first. The ecosystem map, conventions,
+> hard rules, and `.claude/` skills below remain valid.
+
 ---
 
 ## The Ecosystem

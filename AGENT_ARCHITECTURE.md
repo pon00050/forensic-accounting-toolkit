@@ -1,5 +1,10 @@
 # Agent Architecture — Forensic Accounting Toolkit
 
+> **DISABLED 2026-06-17 — design reference only.** This describes the original tier1–4 GitHub Actions
+> agent system, which was disabled when the project was shelved and **superseded by the leaner
+> Forensic Studio** (`studio/`, `AGENT_TEAM_REDESIGN.md`). It does **not** reflect what runs today —
+> see `RESUMING.md` and `studio/README.md` for current behavior. Retained for historical/design value.
+
 Autonomous CI/CD agent team running on GitHub Actions. Detects problems, fixes
 deterministic ones in-place, dispatches Sonnet workers for reasoning-required
 fixes, and escalates to the human only when necessary.

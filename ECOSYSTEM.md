@@ -1,6 +1,11 @@
 # Ecosystem Status
 
-> Last updated: 2026-03-26 (codebase review + documentation audit complete)
+> Last updated: 2026-06-17.
+> **Project shelved from active development 2026-06-17;** autonomous upkeep runs via the **Forensic
+> Studio** (`studio/`). For current operational state read **`RESUMING.md`**; recent changes are in
+> `CHANGELOG.md`. The test-count figures in the table below are now auto-reconciled to the
+> authoritative hub `CLAUDE.md` by the Studio's `studio-maintain` loop. The Technical Backlog further
+> down is a historical March snapshot — the live refinement backlog is `studio/maintenance/backlog.yml`.
 
 ---
 
