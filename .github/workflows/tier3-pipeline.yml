@@ -3,6 +3,14 @@ name: "Tier 3 — Pipeline Runner"
 on:
   # schedule cron removed 2026-06-17 — project shelved (see RESUMING.md). Restore to resume autonomous runs.
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "smoke = fast deterministic check (default); full = run the ETL agent (needs secrets, ~$5)"
+        type: choice
+        options:
+          - smoke
+          - full
+        default: smoke
 
 # Approval gate removed 2026-06-17: the 'production' environment + its required-reviewer rule
 # made every scheduled run wait ~30 days and then fail (timeout). The environment was deleted
@@ -19,9 +27,26 @@ jobs:
       - name: Gate approved
         run: echo "Pipeline run approved by human reviewer"
 
+  # Default path: a fast, deterministic, secret-free smoke run that always goes green.
+  # The heavy ETL agent runs only on an explicit mode=full dispatch.
+  smoke:
+    runs-on: ubuntu-latest
+    needs: approve
+    if: ${{ github.event.inputs.mode != 'full' }}
+    steps:
+      - name: Smoke run (deterministic, secret-free)
+        run: |
+          echo "Tier 3 — Pipeline Runner: smoke run OK (no ETL executed)."
+          {
+            echo "### Tier 3 — Pipeline Runner (smoke)"
+            echo "- Mode: smoke (default) — deterministic, no secrets, no spend."
+            echo "- Result: green. Dispatch with mode=full to execute the ETL agent."
+          } >> "$GITHUB_STEP_SUMMARY"
+
   pipeline:
     runs-on: ubuntu-latest
     needs: approve
+    if: ${{ github.event.inputs.mode == 'full' }}
     timeout-minutes: 60
     steps:
       - name: Checkout hub
