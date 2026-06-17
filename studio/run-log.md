@@ -5,3 +5,4 @@ Machine-appended by Studio workflows. Newest at bottom.
 
 | UTC timestamp | loop | mode | result | note |
 |---|---|---|---|---|
+| 2026-06-17T09:03:36Z | studio-refresh | smoke | ok | plumbing verified |
