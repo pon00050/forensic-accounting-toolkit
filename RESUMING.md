@@ -10,6 +10,27 @@ the CI orchestration layer, and (gitignored) working notes.
 
 ---
 
+## Forensic Studio — LIVE (autonomous, internal-only)
+
+As of 2026-06-17 the project is **shelved from active development but running autonomously** via
+the **Forensic Studio** (`studio/`, design in `AGENT_TEAM_REDESIGN.md`). It is **ON now**
+(`FLEET_ENABLED=true`) and runs two weekly, gated, deterministic loops at **$0**:
+- **studio-refresh** — keeps analytical data fresh (smoke now; full DART ETL once `DART_API_KEY` is added).
+- **studio-maintain** — discovers the refinement backlog (full fix→verify→auto-merge once `ANTHROPIC_API_KEY` is added).
+
+Every run passes a **fail-closed heartbeat gate** (master switch + dead-man's-switch). Outputs land in
+`studio/reports/` as provenance-stamped, machine-generated/unreviewed artifacts; nothing is published
+as a forensic conclusion (internal-only posture). Green no-op when disabled → no email noise.
+
+**Controls (the only human touchpoints):**
+- **Pause instantly:** `gh variable set FLEET_ENABLED --body false` (loops become green no-op skips).
+- **Keep alive:** update `studio/state/LAST_CHECKIN` to today; no check-in within 120 days → fail closed.
+- **Activate full modes:** add repo secrets `DART_API_KEY` and `ANTHROPIC_API_KEY` (or a
+  `CLAUDE_CODE_OAUTH_TOKEN`), and set the Anthropic workspace monthly ceiling (~$25 backstop; expected
+  $5–20/mo active, tapering). See `studio/README.md` and `AGENT_TEAM_REDESIGN.md` §cost.
+
+---
+
 ## Health snapshot at shelving
 
 - **All 13 repos pass their tests.** 842 tests across the 12 standalone repos, plus

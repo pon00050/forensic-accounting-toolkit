@@ -4,6 +4,33 @@ Audit trail for ecosystem-wide changes coordinated from this hub.
 
 ---
 
+## 2026-06-17 (later) — Forensic Studio: autonomous internal-only operation + Tier 3 green
+
+Built a self-running, bounded-autonomy **Forensic Studio** (`studio/`, `AGENT_TEAM_REDESIGN.md`) so the
+ecosystem keeps delivering reproducible outputs with minimal human intervention. Shaped by an
+adversarial review (7 parallel research agents) of where unattended agent systems fail.
+
+**Tier 3 green checkmark.** Added a `mode` input to `tier3-pipeline.yml` (default `smoke` = fast,
+deterministic, secret-free job); dispatched a green run; deleted the 10 stale failed/cancelled runs;
+re-disabled. (The "Run failed" emails were the final flush of approval-gate-timeout runs after the
+`production` environment deletion — no new ones can arrive.)
+
+**Studio — cage + two loops, all proven green on GitHub:**
+- Cage: `fleet.config.yml`; a fail-closed **heartbeat gate** (`.github/actions/studio-heartbeat`) driven
+  by the `FLEET_ENABLED` master switch + a dead-man's-switch check-in; domain guardrails
+  (`check_domain_rules.py` CI + `pre_data_raw_guard.py` PreToolUse hook → `data/raw/` un-writable);
+  `provenance.py` stamping; `run-log.md`.
+- `studio-refresh.yml` (weekly): smoke proven; full = DART ETL via FinanceDataReader ($0 LLM).
+- `studio-maintain.yml` (weekly): deterministic discovery proven; full reuses `fix_agent`→`verify_agent`.
+- Verified on GitHub: `FLEET_ENABLED=false` → green no-op skip; `=true` → loops run, commit
+  provenance-stamped artifacts, push. **Live now** on the safe $0 deterministic loops.
+
+**Posture: internal-only** — never auto-publishes entity-level forensic conclusions ("probability, not
+a verdict"). Cost: deterministic loops $0 (free public CI + free DART); maintenance crew ~$5–20/mo
+active, tapering; $25/mo workspace ceiling backstop.
+
+---
+
 ## 2026-06-17 — Project shelved: CI automation shut down, hub tidied
 
 Brought the ecosystem to a clean, quiet, healthy resting state before stepping away.
