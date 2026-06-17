@@ -1,13 +1,15 @@
 name: "Studio — Data Refresh (internal-only)"
 
-# Self-running data-refresh loop. Gated by the FLEET_ENABLED master switch via the
-# heartbeat action — a disabled fleet is a green no-op (no email). See studio/README.md.
+# Self-running data-refresh loop. Gated by FLEET_ENABLED via the fail-closed heartbeat.
+# smoke (no secrets) = plumbing + liveness only. full (needs DART_API_KEY) = DART ETL via
+# studio/loops/refresh.sh — NOTE: the full ETL body is still scaffolding (Phase 2); see
+# studio/README.md. Transient-prone steps are continue-on-error so a blip never emails.
 
 on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "smoke = plumbing check (no secrets); full = real DART refresh (needs DART_API_KEY)"
+        description: "smoke = plumbing/liveness (no secrets); full = DART ETL (needs DART_API_KEY; Phase-2 scaffold)"
         type: choice
         options:
           - smoke
@@ -46,12 +48,14 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install PyYAML (provenance/discovery helpers)
+      - name: Install PyYAML
         if: ${{ steps.hb.outputs.proceed == 'true' }}
+        continue-on-error: true
         run: pip install --quiet pyyaml
 
       - name: Smoke — plumbing check (no secrets)
         if: ${{ steps.hb.outputs.proceed == 'true' && github.event.inputs.mode != 'full' }}
+        continue-on-error: true
         run: |
           mkdir -p studio/reports
           stamp="studio/reports/refresh-$(date -u +%Y-%m-%d).md"
@@ -59,21 +63,28 @@ jobs:
             echo "# Studio data-refresh (smoke) — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo
             echo "Heartbeat passed; runner ready; provenance + commit path exercised."
-            echo "No ETL executed (smoke). Full refresh runs on mode=full once DART_API_KEY is set."
+            echo "No ETL executed (smoke). Full DART refresh (mode=full) needs DART_API_KEY"
+            echo "and the Phase-2 ETL body in studio/loops/refresh.sh."
           } > "$stamp"
           python studio/provenance.py stamp "$stamp" --loop studio-refresh --model none-deterministic
           echo "| $(date -u +%Y-%m-%dT%H:%M:%SZ) | studio-refresh | smoke | ok | plumbing verified |" >> studio/run-log.md
 
-      - name: Full — real DART refresh (needs DART_API_KEY)
+      - name: Full — DART refresh (needs DART_API_KEY; Phase-2 scaffold)
         if: ${{ steps.hb.outputs.proceed == 'true' && github.event.inputs.mode == 'full' }}
+        continue-on-error: true
         env:
           DART_API_KEY: ${{ secrets.DART_API_KEY }}
         run: bash studio/loops/refresh.sh
 
-      - name: Stage + domain guardrail (data/raw immutable)
+      - name: Liveness check-in (keeps fleet alive + repo active)
+        if: ${{ steps.hb.outputs.proceed == 'true' }}
+        continue-on-error: true
+        run: date -u +%Y-%m-%d > studio/state/LAST_CHECKIN
+
+      - name: Domain guardrail (data/raw immutable — real gate)
         if: ${{ steps.hb.outputs.proceed == 'true' }}
         run: |
-          git add studio/reports studio/run-log.md
+          git add studio
           mapfile -t changed < <(git diff --cached --name-only)
           if [ ${#changed[@]} -gt 0 ]; then
             python studio/guardrails/check_domain_rules.py --paths "${changed[@]}"
@@ -83,6 +94,7 @@ jobs:
 
       - name: Commit + push
         if: ${{ steps.hb.outputs.proceed == 'true' }}
+        continue-on-error: true
         run: |
           git config user.name "studio-bot[bot]"
           git config user.email "studio-bot@users.noreply.github.com"

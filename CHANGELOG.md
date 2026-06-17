@@ -4,6 +4,30 @@ Audit trail for ecosystem-wide changes coordinated from this hub.
 
 ---
 
+## 2026-06-17 (audit) — Walk-away audit: corrected overclaims, hardened loops, added a real engine
+
+A 3-agent adversarial audit ("can the owner walk away and trust it stays healthy?") found the Studio
+was a well-built cage with **stub engines**, and that the entries below overstated it. Corrections:
+- **Honesty.** RESUMING.md, studio/README.md, and fleet.config.yml now state plainly that the full DART
+  ETL (`studio/loops/refresh.sh`) and the LLM fix→verify→merge crew (studio-maintain `full`) are
+  scaffolded, **not implemented**. The earlier "runs the maintenance crew" / "full reuses fix_agent"
+  framing was wrong; adding the secrets alone would not make them work.
+- **A real engine** (owner's call, "build a real engine now"): `studio/maintenance/sync_doc_counts.py`
+  — deterministic, no LLM, no secrets — reconciles ECOSYSTEM.md test counts to the authoritative hub
+  CLAUDE.md. studio-maintain now runs it and commits the fix (first real fix: kr-beneish 61→73 tests).
+- **Email-safety.** Transient-prone loop steps are `continue-on-error` so a network/PyPI/push blip can't
+  reproduce the failure-email pain; the `data/raw` guardrail stays a hard gate.
+- **Self-sustaining.** Each enabled run auto-bumps `studio/state/LAST_CHECKIN`, keeping the repo active
+  so GitHub never auto-disables the schedules; the dead-man's switch now only trips if the loop itself
+  stops running for 120 days.
+- **Config wired.** `discover.py` now reads `posture` + `auto_merge_classes` from fleet.config.yml; the
+  header marks which keys are runtime vs reference (it was previously decorative).
+- Audit confirmed the underlying **toolkit is genuinely complete/healthy to walk away from** (tests
+  green, zero unpushed), and that the one pre-existing unattended email risk is kr-company-registry's
+  ungated weekly `refresh.yml` (owner chose to leave as-is).
+
+---
+
 ## 2026-06-17 (later) — Forensic Studio: autonomous internal-only operation + Tier 3 green
 
 Built a self-running, bounded-autonomy **Forensic Studio** (`studio/`, `AGENT_TEAM_REDESIGN.md`) so the

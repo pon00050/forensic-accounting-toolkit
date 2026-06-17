@@ -3,7 +3,14 @@
 > Written 2026-06-17. A design for how a team of AI agents could autonomously refine the
 > 13-repo forensic-accounting ecosystem, unattended, after the owner steps away.
 > Companion to `RESUMING.md` (resume guide) and `AGENT_ARCHITECTURE.md` (the *existing*,
-> now-disabled system). Status: **proposal — not yet built.**
+> now-disabled system).
+>
+> **Build status (2026-06-17, post-audit):** PARTIALLY BUILT. The *cage* (heartbeat/fail-closed gate,
+> `data/raw` guardrail + PreToolUse hook, provenance, run-log, FLEET_ENABLED master switch) is live, and
+> the maintenance loop performs one *real* deterministic job (doc-count reconciliation). The heavyweight
+> *engines* described below — full DART data refresh and the LLM fix→verify→merge crew — are **scaffolded
+> but not yet implemented**. Treat this document as the design/target; see `studio/README.md` and
+> `RESUMING.md` for exactly what runs today.
 
 Grounded in four parallel research streams (2026-06-17): (A) reverse-engineering the existing
 agent system, (B) cataloging the real refinement work surface across the 13 repos, (C) current

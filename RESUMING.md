@@ -12,22 +12,37 @@ the CI orchestration layer, and (gitignored) working notes.
 
 ## Forensic Studio — LIVE (autonomous, internal-only)
 
-As of 2026-06-17 the project is **shelved from active development but running autonomously** via
-the **Forensic Studio** (`studio/`, design in `AGENT_TEAM_REDESIGN.md`). It is **ON now**
-(`FLEET_ENABLED=true`) and runs two weekly, gated, deterministic loops at **$0**:
-- **studio-refresh** — keeps analytical data fresh (smoke now; full DART ETL once `DART_API_KEY` is added).
-- **studio-maintain** — discovers the refinement backlog (full fix→verify→auto-merge once `ANTHROPIC_API_KEY` is added).
+As of 2026-06-17 the project is **shelved from active development but running autonomously** via the
+**Forensic Studio** (`studio/`, design in `AGENT_TEAM_REDESIGN.md`). It is **ON now**
+(`FLEET_ENABLED=true`) and runs two weekly, gated loops at **$0** (free public-repo CI, no LLM). Each
+run self-bumps `studio/state/LAST_CHECKIN`, so while enabled it stays alive and the repo stays active
+(GitHub never auto-disables the schedules).
 
-Every run passes a **fail-closed heartbeat gate** (master switch + dead-man's-switch). Outputs land in
-`studio/reports/` as provenance-stamped, machine-generated/unreviewed artifacts; nothing is published
-as a forensic conclusion (internal-only posture). Green no-op when disabled → no email noise.
+**What runs today (real, deterministic):**
+- **studio-maintain** — writes a discovery report of the refinement backlog AND performs a real
+  **doc-count reconciliation** (rewrites stale `N tests` figures in ECOSYSTEM.md to match the
+  authoritative hub CLAUDE.md), committing the fix.
+- **studio-refresh** — a liveness/plumbing check that commits a dated, provenance-stamped status note.
+
+**Scaffolded but NOT yet implemented (be honest with yourself when you return):**
+- The **full DART ETL** (`studio/loops/refresh.sh`, mode=full, needs `DART_API_KEY`) currently only
+  *imports* the pipeline — it does **not** refresh parquets yet. Parquets stay ~100 days stale until built.
+- The **LLM fix→verify→auto-merge crew** (studio-maintain mode=full, needs `ANTHROPIC_API_KEY`) is a
+  no-op placeholder (Phase 3). Adding the secret alone does nothing until the engine body is written
+  (it would reuse `scripts/agents/fix_agent.py` → `verify_agent.py`).
+
+Every run passes a **fail-closed heartbeat gate** (master switch + dead-man's-switch). Outputs are
+provenance-stamped, machine-generated/unreviewed; nothing is published as a forensic conclusion
+(internal-only posture). Transient failures are swallowed (`continue-on-error`) so a blip never emails.
 
 **Controls (the only human touchpoints):**
 - **Pause instantly:** `gh variable set FLEET_ENABLED --body false` (loops become green no-op skips).
-- **Keep alive:** update `studio/state/LAST_CHECKIN` to today; no check-in within 120 days → fail closed.
-- **Activate full modes:** add repo secrets `DART_API_KEY` and `ANTHROPIC_API_KEY` (or a
-  `CLAUDE_CODE_OAUTH_TOKEN`), and set the Anthropic workspace monthly ceiling (~$25 backstop; expected
-  $5–20/mo active, tapering). See `studio/README.md` and `AGENT_TEAM_REDESIGN.md` §cost.
+  If paused >~60 days, GitHub auto-disables the schedules; to resume, `gh workflow enable` both studio
+  workflows AND set `FLEET_ENABLED=true`.
+- **Make it actually deliver (finish the engines):** implement the `refresh.sh` ETL body + the
+  studio-maintain LLM execute step, add `DART_API_KEY` / `ANTHROPIC_API_KEY` (or a
+  `CLAUDE_CODE_OAUTH_TOKEN`), and set the Anthropic workspace ceiling (~$25 backstop; expected
+  $5–20/mo once the LLM crew runs). See `studio/README.md` and `AGENT_TEAM_REDESIGN.md` §cost.
 
 ---
 

@@ -1,7 +1,15 @@
-# Forensic Studio — fleet configuration (the "cage")
-# Single source of truth for the autonomous, INTERNAL-ONLY refresh + refinement fleet.
-# Every loop reads this and the FLEET_ENABLED master switch before acting.
-# See AGENT_TEAM_REDESIGN.md, RESUMING.md, and the approved plan.
+# Forensic Studio — fleet configuration (reference + PARTIAL runtime config).
+# INTERNAL-ONLY posture. See AGENT_TEAM_REDESIGN.md, RESUMING.md, studio/README.md.
+#
+# CONSUMED at runtime TODAY:
+#   - posture, auto_merge_classes   -> read by studio/maintenance/discover.py
+# REFERENCE ONLY (authoritative copy lives elsewhere — keep in sync by hand until wired):
+#   - schedules                     -> real crons are in the workflow YAMLs (studio-refresh/maintain)
+#   - deadman_checkin_max_days      -> hardcoded default in .github/actions/studio-heartbeat/action.yml
+#   - budget.per_run_caps_usd       -> enforced per-run in scripts/agents/*.py POLICY blocks
+#   - budget.workspace_monthly_ceiling_usd -> set by the owner in the Anthropic workspace console
+#   - models                        -> each agent sets its own model in its POLICY
+# (FLEET_ENABLED is a GitHub repo *variable*, not in this file — it is the live master switch.)
 
 version: 1
 
