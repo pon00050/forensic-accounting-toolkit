@@ -1,4 +1,4 @@
-# Studio maintenance discovery — 2026-06-17T09:52:08+00:00
+# Studio maintenance discovery — 2026-06-17T23:43:46+00:00
 
 Posture: **internal-only**. 8 open of 8 item(s); 6 SAFE. Items whose class is in the fleet auto-merge whitelist are eligible for autonomous fix→verify→auto-merge (Phase 3, not yet built); all others are propose-only.
 
