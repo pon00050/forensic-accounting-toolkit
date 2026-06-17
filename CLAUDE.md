@@ -39,7 +39,7 @@ Thirteen repos across four layers. Each is an independent git repo.
 
 | Project | Path | Purpose |
 |---------|------|---------|
-| **kr-real-estate** | `../kr-real-estate` | Korean real estate market analysis (early stage) |
+| **kr-real-estate (portfolio)** | `../kr-real-estate` | Umbrella for 8 Korean RE projects (district credit-risk, fraud-screen, tax-screen, valuation-research, etc.) |
 
 ---
 
@@ -215,8 +215,8 @@ Every doc in the ecosystem falls into exactly one of three layers:
 | Layer | What | Where | Git-tracked? |
 |-------|------|-------|-------------|
 | **1. Repo-local public** | CLAUDE.md, README.md, `docs/` (API docs), `reports/` (run logs), `articles/` (learning content) | Each repo | Yes |
-| **2. Hub local-only** | Working notes not appropriate for public repos | `knowledge/` (this hub only) | No (gitignored) |
-| **3. Hub operational** | ECOSYSTEM.md, WORKFLOW.md, ARCHITECTURE.md, cross-issues/, content/captures/ | Hub root | Yes |
+| **2. Hub local-only** | Working notes + content captures/drafts not appropriate for public repos | `knowledge/` and `content/` (this hub only) | No (gitignored) |
+| **3. Hub operational** | ECOSYSTEM.md, WORKFLOW.md, ARCHITECTURE.md, cross-issues/ | Hub root | Yes |
 
 **Decision tree — "Where does this doc go?"**
 - Needed to understand/use the code in one specific repo? → Layer 1 (that repo's `docs/` or `reports/`)

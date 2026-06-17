@@ -4,6 +4,43 @@ Audit trail for ecosystem-wide changes coordinated from this hub.
 
 ---
 
+## 2026-06-17 — Project shelved: CI automation shut down, hub tidied
+
+Brought the ecosystem to a clean, quiet, healthy resting state before stepping away.
+Full resumption guide written to **`RESUMING.md`**.
+
+**Why:** The repo was emailing recurring CI failures — the weekly "Tier 3 — Pipeline Runner"
+cron landed on the `production` environment's required-reviewer gate, waited ~30 days with no
+approval, then failed on timeout, every cycle. Several other scheduled workflows were also
+running daily and consuming Anthropic API spend with no one working the project.
+
+**CI / automation:**
+- Cancelled the run that was waiting on approval (would have emailed another failure ~mid-July).
+- Removed all `schedule:` crons from the 11 scheduled workflows (kept `workflow_dispatch` +
+  event triggers); each edit marked with a dated `# schedule cron removed 2026-06-17` comment.
+- Removed the `production` approval gate from `tier3-pipeline.yml` and **deleted the `production`
+  GitHub environment** (the gate was the root cause of the timeout-failure emails).
+- **Disabled all 15 workflows** via `gh workflow disable` as an immediate backstop.
+- Verified: no `schedule:`/`cron:` triggers remain; all 15 workflow YAMLs parse cleanly.
+
+**Hub folder + leak-gap closure:**
+- Gitignored `.wrangler/`, `cloudflare-worker/.wrangler/` (held Cloudflare account id/name) and `*.eml`.
+- Relocated local-only notes into gitignored `knowledge/`: `PORTFOLIO_REFRAME_2026Q2.md` →
+  `knowledge/business/positioning/`; `docs/strategy/*` → `knowledge/context/market-intelligence/`;
+  removed the empty `docs/`.
+- Deleted two GitHub-notification `.eml` files.
+- Fixed a CLAUDE.md doc/reality mismatch (`content/` is gitignored Layer-2, not tracked Layer-3).
+
+**Health verified at shelving:** all 13 repos green (842 tests + krff-shell 317); zero unpushed
+commits anywhere. krff-shell's 11 MCP tests need the dev extra locally (`uv sync --extra dev`) —
+its own CI already does this, so not a code defect.
+
+**Not actioned (needs interactive auth / your call):** Cloudflare Worker teardown
+(`wrangler login && wrangler delete`); optional commit of ronanwrites `.mdx` drafts in two sibling
+repos. See `RESUMING.md`.
+
+---
+
 ## 2026-03-31 — Full autonomous fix loop: dispatch + Sonnet fix worker + sibling PAT support
 
 Closed all remaining gaps in the detect → fix → PR pipeline.

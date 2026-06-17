@@ -13,8 +13,7 @@ name: "Telegram Bot — Command Router"
 # Normal latency with webhook active: ACK <1 sec, result 30–60 sec.
 
 on:
-  schedule:
-    - cron: "*/30 * * * *"   # fallback poll — reduced from */5 since CF Worker handles real-time
+  # schedule cron removed 2026-06-17 — project shelved (see RESUMING.md). Restore to resume autonomous runs.
   workflow_dispatch:
     inputs:
       command:

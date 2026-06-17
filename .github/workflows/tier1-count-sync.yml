@@ -4,8 +4,7 @@ on:
   workflow_run:
     workflows: ["Tier 1 — Cross-Repo Tests"]
     types: [completed]
-  schedule:
-    - cron: "30 23 * * *"   # 08:30 KST daily — standalone fallback if workflow_run doesn't fire
+  # schedule cron removed 2026-06-17 — project shelved (see RESUMING.md). Restore to resume autonomous runs.
   workflow_dispatch:
 
 permissions:

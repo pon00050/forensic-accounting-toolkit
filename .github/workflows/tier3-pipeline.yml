@@ -1,12 +1,12 @@
 name: "Tier 3 — Pipeline Runner"
 
 on:
-  schedule:
-    - cron: "0 3 * * 1"   # Monday 12:00 KST weekly
+  # schedule cron removed 2026-06-17 — project shelved (see RESUMING.md). Restore to resume autonomous runs.
   workflow_dispatch:
 
-# Human approval gate (Task 10): environment 'production' requires manual review
-# Set up at: Settings > Environments > production > Required reviewers: pon00050
+# Approval gate removed 2026-06-17: the 'production' environment + its required-reviewer rule
+# made every scheduled run wait ~30 days and then fail (timeout). The environment was deleted
+# and the 'approve' job below is now a no-op pass-through kept only for job structure.
 
 permissions:
   issues: write
@@ -15,7 +15,6 @@ permissions:
 jobs:
   approve:
     runs-on: ubuntu-latest
-    environment: production
     steps:
       - name: Gate approved
         run: echo "Pipeline run approved by human reviewer"

@@ -12,6 +12,13 @@ triage-last.json
 _deps/
 _scratchpad/
 
+# Cloudflare Wrangler tool cache (exposes account id/name + request metadata — never commit)
+.wrangler/
+cloudflare-worker/.wrangler/
+
+# GitHub notification email exports (clutter; may carry tracking tokens)
+*.eml
+
 # ----- leak-prevention patterns (auto-added 2026-04-24) -----
 # Block accidental commit of strategy / billing / outreach / pricing files.
 # These categories should live in the gitignored hub working directory, never

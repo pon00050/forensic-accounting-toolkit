@@ -1,8 +1,7 @@
 name: "Tier 1 — Cross-Repo Tests"
 
 on:
-  schedule:
-    - cron: "0 22 * * *"   # 07:00 KST daily
+  # schedule cron removed 2026-06-17 — project shelved (see RESUMING.md). Restore to resume autonomous runs.
   workflow_dispatch:
 
 permissions:

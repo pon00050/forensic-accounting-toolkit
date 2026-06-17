@@ -4,8 +4,7 @@ on:
   workflow_run:
     workflows: ["Tier 3 — Pipeline Runner"]
     types: [completed]
-  schedule:
-    - cron: "0 22 * * *"   # 07:00 KST daily — validates parquet freshness even on non-pipeline days
+  # schedule cron removed 2026-06-17 — project shelved (see RESUMING.md). Restore to resume autonomous runs.
   workflow_dispatch:
 
 permissions:

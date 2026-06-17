@@ -1,8 +1,7 @@
 name: "Tier 3 — Convention Audit (Sonnet)"
 
 on:
-  schedule:
-    - cron: "0 4 * * 0"   # Sunday 13:00 KST weekly
+  # schedule cron removed 2026-06-17 — project shelved (see RESUMING.md). Restore to resume autonomous runs.
   workflow_dispatch:
 
 permissions:
