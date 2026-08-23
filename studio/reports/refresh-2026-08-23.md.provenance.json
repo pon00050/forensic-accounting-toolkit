@@ -1,0 +1,12 @@
+{
+  "artifact": "studio/reports/refresh-2026-08-23.md",
+  "artifact_sha256": "08f93d14c0d37d2a20d794b0567eb1dd81a88092c1245c329605175731c89691",
+  "generated_by": "forensic-studio",
+  "loop": "studio-refresh",
+  "model": "none-deterministic",
+  "git_sha": "0fbd668fc9538f870afe3ba86cb180e5eb2dc630",
+  "generated_utc": "2026-08-23T21:11:48+00:00",
+  "inputs": [],
+  "posture": "internal-only",
+  "disclaimer": "machine-generated, unreviewed \u2014 reproducible computation, not a verified claim or accusation. Report probability, not a verdict."
+}
