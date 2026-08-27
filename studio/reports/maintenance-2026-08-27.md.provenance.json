@@ -1,0 +1,17 @@
+{
+  "artifact": "studio/reports/maintenance-2026-08-27.md",
+  "artifact_sha256": "b3311e847be33110224acbd4b23a2001fe8b3a0d126830efdaa6b5224a356459",
+  "generated_by": "forensic-studio",
+  "loop": "studio-maintain",
+  "model": "none-deterministic",
+  "git_sha": "55a334ce10e6ea5e6e22a485ae9b360e3a0e1577",
+  "generated_utc": "2026-08-27T03:01:43+00:00",
+  "inputs": [
+    {
+      "path": "studio/maintenance/backlog.yml",
+      "sha256": "baa319dfd567f9a37a33b8df19e0582529d1e94aea9f1233cd1a874ae14467dd"
+    }
+  ],
+  "posture": "internal-only",
+  "disclaimer": "machine-generated, unreviewed \u2014 reproducible computation, not a verified claim or accusation. Report probability, not a verdict."
+}
