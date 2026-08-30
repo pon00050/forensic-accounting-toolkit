@@ -29,3 +29,4 @@ Machine-appended by Studio workflows. Newest at bottom.
 | 2026-08-19T22:29:55Z | studio-maintain | doc-count-sync | ok | doc-count-sync: ECOSYSTEM.md already matches CLAUDE.md (no drift) |
 | 2026-08-23T21:11:48Z | studio-refresh | smoke | ok | plumbing verified |
 | 2026-08-27T03:01:43Z | studio-maintain | doc-count-sync | ok | doc-count-sync: ECOSYSTEM.md already matches CLAUDE.md (no drift) |
+| 2026-08-30T23:00:35Z | studio-refresh | smoke | ok | plumbing verified |
